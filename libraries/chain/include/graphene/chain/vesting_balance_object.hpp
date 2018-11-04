@@ -143,6 +143,9 @@ namespace graphene { namespace chain {
          /// The vesting policy stores details on when funds vest, and controls when they may be withdrawn
          vesting_policy policy;
 
+         /// vesting balance is for gpos purposes
+         bool is_gpos = false;
+
          vesting_balance_object() {}
 
          ///@brief Deposit amount into vesting balance, requiring it to vest before withdrawal
@@ -224,4 +227,5 @@ FC_REFLECT_DERIVED(graphene::chain::vesting_balance_object, (graphene::db::objec
                    (owner)
                    (balance)
                    (policy)
+                   (is_gpos)
                   )
