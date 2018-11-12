@@ -1354,56 +1354,102 @@ void database::perform_chain_maintenance(const signed_block& next_block, const g
                // this is all testing, need real work here
 
                // get last time this guy voted
-               wdump((stake_account.get_id()));
+               //wdump((stake_account.get_id()));
 
-               // assume a coefficient of 0.83
-               wdump((voting_stake));
-               double vesting_factor = 0.83;
-               voting_stake = (uint64_t)floor(voting_stake * vesting_factor);
-               wdump((voting_stake));
+               //assume a last date voted
+               //fc::time_point_sec last_date_voted = time_point_sec(1541535074); //Tuesday, November 6, 2018 8:11:14 PM
+               fc::time_point_sec last_date_voted = time_point_sec(1542065178); //Monday, November 12, 2018 11:26:18 PM
 
                // vesting_period = 6 months by default
                // vesting_subperiods = 1 month by default
 
                // so
-               auto vesting_period = fc::seconds(15552000); // 60x60x24x30x6
-               auto vesting_subperiod = fc::seconds(2592000); // 60x60x24x30
+               //auto vesting_period = fc::seconds(15552000); // 60x60x24x30x6
+               //auto vesting_subperiod = fc::seconds(2592000); // 60x60x24x30
+               auto gpo = d.get_global_properties();
+               auto vesting_period = fc::seconds(gpo.parameters.vesting_period);
+               auto vesting_subperiod = fc::seconds(gpo.parameters.vesting_subperiod);
+               auto period_start = time_point_sec(gpo.parameters.period_start);
+
+               //fc::time_point_sec period_start = time_point_sec(1541875137); // Saturday, November 10, 2018 6:38:57 PM
+               fc::time_point_sec period_end = period_start + vesting_period;
 
                auto number_of_subperiods = vesting_period.count() / vesting_subperiod.count();
-               wdump((number_of_subperiods));
-
-               fc::time_point_sec period_start = time_point_sec(1541875137); // Saturday, November 10, 2018 6:38:57 PM
-               fc::time_point_sec period_end = period_start + vesting_period;
+               //wdump((number_of_subperiods));
 
                // assuming period_start > now && period_end < now
                // in what period are we now?
                auto now = d.head_block_time();
-
-               //wdump((now));
-               //wdump((period_start));
-               //wdump((period_end));
                auto period_seconds = now.sec_since_epoch() - period_start.sec_since_epoch();
-               //wdump((period_seconds));
-
-               //auto mod = vesting_period.count() % period_seconds;
-               //wdump((mod));
 
                // get in what period we are
-               for(int i = 1; i<=number_of_subperiods; i++)
+               int i = 1;
+               for(i = 1; i<=number_of_subperiods; i++)
                {
-                  //wdump((vesting_subperiod.to_seconds());
-                  //wdump((period_seconds));
-                  //wdump((i));
-
-                  if(period_seconds > 2592000 * (i-1)
-                     && period_seconds < 2592000 * i) {
+                  if(period_seconds > gpo.parameters.vesting_subperiod * (i-1)
+                     && period_seconds < gpo.parameters.vesting_subperiod * i) {
 
                      //std::string weare = "we are in period: " + i;
-                     wdump((i));
+                     //wdump((i));
                      break;
                   }
                }
 
+               vector<bool> voted_on_period;
+               // all hardcoded, change
+               double n = 6;
+               if(i == 1) {
+                  bool voted = false;
+                  if(last_date_voted < (period_start + fc::seconds(gpo.parameters.vesting_subperiod*i)) && last_date_voted > period_start) {
+                     n = 7;
+                     voted = true;
+                  }
+                  else {
+                     n = 6;
+                     voted = false;
+                  }
+                  voted_on_period.push_back(voted);
+               }
+
+               else if(i == 2) {
+                  bool voted = false;
+                  if(last_date_voted < (period_start + fc::seconds(gpo.parameters.vesting_subperiod*i)) && last_date_voted > period_start) {
+                     n = 7;
+                     voted = true;
+                  }
+                  else {
+                     n = 5;
+                     voted = false;
+                  }
+                  voted_on_period.push_back(voted);
+               }
+
+               else if(i == 3) {
+                  bool voted = false;
+                  if(last_date_voted < (period_start + fc::seconds(gpo.parameters.vesting_subperiod*i)) && last_date_voted > period_start) {
+                     n = 7;
+                     voted = true;
+                  }
+                  else {
+                     n = 4;
+                     voted = false;
+                  }
+                  voted_on_period.push_back(voted);
+               }
+/*
+               wdump((last_date_voted));
+               wdump((period_start));
+               wdump((gpo.parameters.vesting_subperiod));
+               wdump((i));
+               wdump((fc::seconds(gpo.parameters.vesting_subperiod*i)));
+               wdump((n));
+*/
+
+               //wdump((voting_stake));
+               double vesting_factor = (n - 1)/6;
+               //wdump((vesting_factor));
+               voting_stake = (uint64_t)floor(voting_stake * vesting_factor);
+               //wdump((voting_stake));
 
                //
                /*

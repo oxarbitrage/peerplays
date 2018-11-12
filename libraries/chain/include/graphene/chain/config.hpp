@@ -194,3 +194,8 @@
 #define TOURNAMENT_MAX_WHITELIST_LENGTH                     1000
 #define TOURNAMENT_MAX_START_TIME_IN_FUTURE                 (60*60*24*7*4) // 1 month
 #define TOURNAMENT_MAX_START_DELAY                          (60*60*24*7) // 1 week
+
+#define VESTING_PERIOD                                      (60*60*24*30*6) // 6 months
+#define VESTING_SUBPERIOD                                   (60*60*24*30) // 1 month
+#define PERIOD_START                                        1541875137 // Saturday, November 10, 2018 6:38:57 PM
+

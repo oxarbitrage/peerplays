@@ -237,23 +237,60 @@ BOOST_FIXTURE_TEST_SUITE( gpos_tests, database_fixture )
             generate_block();
          }
 
-         // no votes for witness
-         auto witness = witness_id_type(1)(db);
-         wdump((witness));
-         // no votes for committee
-         auto commi = committee_member_id_type(1)(db);
-         wdump((commi));
+         // update default gpos global parameters to make this thing faster
+         BOOST_CHECK_EQUAL(db.get_global_properties().parameters.vesting_period, 15552000);
+         BOOST_CHECK_EQUAL(db.get_global_properties().parameters.vesting_subperiod, 2592000);
+         BOOST_CHECK_EQUAL(db.get_global_properties().parameters.period_start, 1541875137);
+
+         auto now = db.head_block_time().sec_since_epoch();
+         db.modify(db.get_global_properties(), [now](global_property_object& p) {
+            p.parameters.vesting_period = 518400; // 60x60x24x6 = 6 days
+            p.parameters.vesting_subperiod = 86400; // 60x60x24 = 1 day
+            p.parameters.period_start =  now; // now
+         });
+
+         wdump((db.head_block_time()));
+
+         BOOST_CHECK_EQUAL(db.get_global_properties().parameters.vesting_period, 518400);
+         BOOST_CHECK_EQUAL(db.get_global_properties().parameters.vesting_subperiod, 86400);
+         BOOST_CHECK_EQUAL(db.get_global_properties().parameters.period_start, now);
+         // end global changes
+
+         // no votes for witness 1
+         auto witness1 = witness_id_type(1)(db);
+         BOOST_CHECK_EQUAL(witness1.total_votes, 0);
+
+         // no votes for witness 2
+         auto witness2 = witness_id_type(2)(db);
+         BOOST_CHECK_EQUAL(witness2.total_votes, 0);
+
+         // no votes for committee member 1
+         auto committee_member1 = committee_member_id_type(1)(db);
+         BOOST_CHECK_EQUAL(committee_member1.total_votes, 0);
+
+         // no votes for committee member 2
+         auto committee_member2 = committee_member_id_type(2)(db);
+         BOOST_CHECK_EQUAL(committee_member2.total_votes, 0);
 
          // advance to period start // Saturday, November 10, 2018 6:38:57 PM
+         /*
          while( db.head_block_time() <= fc::time_point_sec(1541875137) )
          {
             generate_block();
          }
+         */
+         // no need to advance to perdiod start, we are in period start
+
+         // just advance to tomorrow
+         generate_block((fc::time_point_sec(db.head_block_time() + fc::days(1))).sec_since_epoch());
          generate_block();
-
-
-         auto wit = witness_id_type(1);
-         auto com = committee_member_id_type(1);
+         /*
+         while( db.head_block_time() <= fc::time_point_sec(db.head_block_time() + fc::days(1)) )
+         {
+            generate_block();
+         }
+          */
+         wdump((db.head_block_time()));
 
          // vote for something
          {
@@ -262,8 +299,8 @@ BOOST_FIXTURE_TEST_SUITE( gpos_tests, database_fixture )
             account_update_operation op;
             op.account = alice_id;
             op.new_options = alice_id(db).options;
-            op.new_options->votes.insert(wit(db).vote_id);
-            op.new_options->votes.insert(com(db).vote_id);
+            op.new_options->votes.insert(witness1.vote_id);
+            op.new_options->votes.insert(committee_member1.vote_id);
             trx.operations.push_back(op);
             trx.validate();
             set_expiration(db, trx);
@@ -271,30 +308,46 @@ BOOST_FIXTURE_TEST_SUITE( gpos_tests, database_fixture )
             PUSH_TX(db, trx);
             //trx.clear();
          }
+         //generate_block();
+         //generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
+         generate_block();
+
+         witness1 = witness_id_type(1)(db);
+         committee_member1 = committee_member_id_type(1)(db);
+         BOOST_CHECK_EQUAL(witness1.total_votes, 83);
+         BOOST_CHECK_EQUAL(committee_member1.total_votes, 83);
+
+         // advance 1 day more
+         //generate_block((fc::time_point_sec(db.head_block_time() + fc::days(1))).sec_since_epoch());
+         generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
          generate_block();
          generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
          generate_block();
-
-         auto aw = db.get_global_properties().active_witnesses;
-         wdump((aw));
-
-         auto acm = db.get_global_properties().active_committee_members;
-         wdump((acm));
-
-
-         witness = witness_id_type(1)(db);
-         wdump((witness));
-
-         commi = committee_member_id_type(1)(db);
-         wdump((commi));
-
-
-         // advance to period start + 2 months, trying to figure out in what subperiod i am // Sunday, March 3, 2019 9:01:22 PM
-         while( db.head_block_time() <= fc::time_point_sec(1551646882) )
-         {
-            generate_block();
-         }
          generate_block();
+
+         wdump((db.head_block_time()));
+
+         // vote for witness2
+         {
+            signed_transaction trx;
+
+            account_update_operation op;
+            op.account = alice_id;
+            op.new_options = alice_id(db).options;
+            op.new_options->votes.insert(witness2.vote_id);
+            trx.operations.push_back(op);
+            trx.validate();
+            set_expiration(db, trx);
+            sign(trx, alice_private_key);
+            PUSH_TX(db, trx);
+            //trx.clear();
+         }
+         //generate_block();
+         //generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
+         generate_block();
+
+         witness2 = witness_id_type(1)(db);
+         BOOST_CHECK_EQUAL(witness2.total_votes, 83);
 
 
 
