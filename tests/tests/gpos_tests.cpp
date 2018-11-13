@@ -213,23 +213,47 @@ BOOST_FIXTURE_TEST_SUITE( gpos_tests, database_fixture )
          generate_block();
 
          transfer( committee_account, alice_id, core.amount( 1000 ) );
+         transfer( committee_account, bob_id, core.amount( 1000 ) );
+
          generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
          generate_block();
 
-         // add some vesting
-         transaction trx;
-         vesting_balance_create_operation op;
-         op.fee = core.amount( 0 );
-         op.creator = alice_id;
-         op.owner = alice_id;
-         op.amount = core.amount( 100 );
-         //op.is_gpos = true; // need to add this to the op
-         //op.vesting_seconds = 60*60*24;
-         op.policy = cdd_vesting_policy_initializer{ 60*60*24 };
+         // default maintenance_interval is 1 day
+         BOOST_CHECK_EQUAL(db.get_global_properties().parameters.maintenance_interval, 86400);
 
-         trx.operations.push_back(op);
-         set_expiration( db, trx );
-         processed_transaction ptx = PUSH_TX( db,  trx, ~0  );
+         // add some vesting to alice
+         {
+            transaction trx;
+            vesting_balance_create_operation op;
+            op.fee = core.amount(0);
+            op.creator = alice_id;
+            op.owner = alice_id;
+            op.amount = core.amount(100);
+            //op.is_gpos = true; // need to add this to the op
+            //op.vesting_seconds = 60*60*24;
+            op.policy = cdd_vesting_policy_initializer{60 * 60 * 24};
+
+            trx.operations.push_back(op);
+            set_expiration(db, trx);
+            processed_transaction ptx = PUSH_TX(db, trx, ~0);
+         }
+
+         // add some vesting to bob
+         {
+            transaction trx;
+            vesting_balance_create_operation op;
+            op.fee = core.amount(0);
+            op.creator = bob_id;
+            op.owner = bob_id;
+            op.amount = core.amount(200);
+            //op.is_gpos = true; // need to add this to the op
+            //op.vesting_seconds = 60*60*24;
+            op.policy = cdd_vesting_policy_initializer{60 * 60 * 24};
+
+            trx.operations.push_back(op);
+            set_expiration(db, trx);
+            processed_transaction ptx = PUSH_TX(db, trx, ~0);
+         }
 
          // advance to HF
          while( db.head_block_time() <= HARDFORK_GPOS_TIME )
@@ -264,32 +288,12 @@ BOOST_FIXTURE_TEST_SUITE( gpos_tests, database_fixture )
          auto witness2 = witness_id_type(2)(db);
          BOOST_CHECK_EQUAL(witness2.total_votes, 0);
 
-         // no votes for committee member 1
-         auto committee_member1 = committee_member_id_type(1)(db);
-         BOOST_CHECK_EQUAL(committee_member1.total_votes, 0);
-
-         // no votes for committee member 2
-         auto committee_member2 = committee_member_id_type(2)(db);
-         BOOST_CHECK_EQUAL(committee_member2.total_votes, 0);
-
-         // advance to period start // Saturday, November 10, 2018 6:38:57 PM
-         /*
-         while( db.head_block_time() <= fc::time_point_sec(1541875137) )
-         {
-            generate_block();
-         }
-         */
-         // no need to advance to perdiod start, we are in period start
-
+         /* commitee haves some votes by default so lets work with witnesses, probably need test for workers as well */
+         generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
          // just advance to tomorrow
-         generate_block((fc::time_point_sec(db.head_block_time() + fc::days(1))).sec_since_epoch());
-         generate_block();
-         /*
-         while( db.head_block_time() <= fc::time_point_sec(db.head_block_time() + fc::days(1)) )
-         {
-            generate_block();
-         }
-          */
+         //generate_block((fc::time_point_sec(db.head_block_time() + fc::days(1))).sec_since_epoch());
+         //generate_block();
+
          wdump((db.head_block_time()));
 
          // vote for something
@@ -300,7 +304,7 @@ BOOST_FIXTURE_TEST_SUITE( gpos_tests, database_fixture )
             op.account = alice_id;
             op.new_options = alice_id(db).options;
             op.new_options->votes.insert(witness1.vote_id);
-            op.new_options->votes.insert(committee_member1.vote_id);
+            //op.new_options->votes.insert(committee_member1.vote_id);
             trx.operations.push_back(op);
             trx.validate();
             set_expiration(db, trx);
@@ -309,48 +313,73 @@ BOOST_FIXTURE_TEST_SUITE( gpos_tests, database_fixture )
             //trx.clear();
          }
          //generate_block();
-         //generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
-         generate_block();
+         generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
+         //generate_block();
 
          witness1 = witness_id_type(1)(db);
-         committee_member1 = committee_member_id_type(1)(db);
-         BOOST_CHECK_EQUAL(witness1.total_votes, 83);
-         BOOST_CHECK_EQUAL(committee_member1.total_votes, 83);
+         BOOST_CHECK_EQUAL(witness1.total_votes, 100);
 
          // advance 1 day more
          //generate_block((fc::time_point_sec(db.head_block_time() + fc::days(1))).sec_since_epoch());
-         generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
-         generate_block();
-         generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
-         generate_block();
-         generate_block();
+         //generate_block();
 
-         wdump((db.head_block_time()));
+         //wdump((db.head_block_time()));
 
          // vote for witness2
          {
             signed_transaction trx;
 
             account_update_operation op;
-            op.account = alice_id;
-            op.new_options = alice_id(db).options;
+            op.account = bob_id;
+            op.new_options = bob_id(db).options;
             op.new_options->votes.insert(witness2.vote_id);
             trx.operations.push_back(op);
             trx.validate();
             set_expiration(db, trx);
-            sign(trx, alice_private_key);
+            sign(trx, bob_private_key);
             PUSH_TX(db, trx);
             //trx.clear();
          }
          //generate_block();
-         //generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
+         generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
+         //generate_block();
+
+         witness2 = witness_id_type(2)(db);
+         BOOST_CHECK_EQUAL(witness2.total_votes, 200);
+
+         // advance 3 day more
+         //generate_block((fc::time_point_sec(db.head_block_time() + fc::days(3))).sec_since_epoch());
+         //generate_block();
+
+         //generate_block();
+         generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
          generate_block();
 
-         witness2 = witness_id_type(1)(db);
-         BOOST_CHECK_EQUAL(witness2.total_votes, 83);
+         //generate_block();
+         generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
+         //generate_block();
 
 
 
+         witness1 = witness_id_type(1)(db);
+         BOOST_CHECK_EQUAL(witness1.total_votes, 83);
+
+
+         witness2 = witness_id_type(2)(db);
+         BOOST_CHECK_EQUAL(witness2.total_votes, 166);
+
+         // make one day more pass
+         //generate_block();
+         generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
+         generate_block();
+
+         //generate_block();
+
+         witness1 = witness_id_type(1)(db);
+         BOOST_CHECK_EQUAL(witness1.total_votes, 83);
+
+         witness2 = witness_id_type(2)(db);
+         BOOST_CHECK_EQUAL(witness2.total_votes, 166);
 
       }
       catch (fc::exception &e) {

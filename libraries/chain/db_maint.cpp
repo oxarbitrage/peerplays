@@ -1341,9 +1341,9 @@ void database::perform_chain_maintenance(const signed_block& next_block, const g
             if (itr != vesting_amounts.end())
                voting_stake += itr->second.value;
 
+            const auto &stats = stake_account.statistics(d);
             if(d.head_block_time() < HARDFORK_GPOS_TIME)
             {
-               const auto &stats = stake_account.statistics(d);
                voting_stake = stats.total_core_in_orders.value
                               + (stake_account.cashback_vb.valid() ? (*stake_account.cashback_vb)(d).balance.amount.value : 0)
                               + d.get_balance(stake_account.get_id(), asset_id_type()).amount.value;
@@ -1358,8 +1358,10 @@ void database::perform_chain_maintenance(const signed_block& next_block, const g
 
                //assume a last date voted
                //fc::time_point_sec last_date_voted = time_point_sec(1541535074); //Tuesday, November 6, 2018 8:11:14 PM
-               fc::time_point_sec last_date_voted = time_point_sec(1542065178); //Monday, November 12, 2018 11:26:18 PM
+               //fc::time_point_sec last_date_voted = time_point_sec(1542065178); //Monday, November 12, 2018 11:26:18 PM
 
+               fc::time_point_sec last_date_voted = stats.last_vote_time;
+               wdump((last_date_voted));
                // vesting_period = 6 months by default
                // vesting_subperiods = 1 month by default
 
@@ -1394,6 +1396,8 @@ void database::perform_chain_maintenance(const signed_block& next_block, const g
                      break;
                   }
                }
+
+               wdump((i));
 
                vector<bool> voted_on_period;
                // all hardcoded, change

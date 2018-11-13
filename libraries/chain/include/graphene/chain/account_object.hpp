@@ -79,7 +79,9 @@ namespace graphene { namespace chain {
           */
          share_type pending_vested_fees;
 
-         /// @brief Split up and pay out @ref pending_fees and @ref pending_vested_fees
+         time_point_sec last_vote_time; // add last time voted
+
+      /// @brief Split up and pay out @ref pending_fees and @ref pending_vested_fees
          void process_fees(const account_object& a, database& d) const;
 
          /**
@@ -458,6 +460,7 @@ FC_REFLECT_DERIVED( graphene::chain::account_statistics_object,
                     (total_core_in_orders)
                     (lifetime_fees_paid)
                     (pending_fees)(pending_vested_fees)
+                    (last_vote_time)
                   )
 
 FC_REFLECT_DERIVED( graphene::chain::pending_dividend_payout_balance_for_holder_object,
