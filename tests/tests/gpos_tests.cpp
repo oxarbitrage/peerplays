@@ -39,9 +39,6 @@ BOOST_FIXTURE_TEST_SUITE( gpos_tests, database_fixture )
 
    BOOST_AUTO_TEST_CASE( dividends )
    {
-
-      //wdump((db.head_block_time()));
-
       ACTORS((alice)(bob));
       try
       {
@@ -50,7 +47,7 @@ BOOST_FIXTURE_TEST_SUITE( gpos_tests, database_fixture )
          // all core coins are in the committee_account
          BOOST_CHECK_EQUAL(get_balance(committee_account(db), core), 1000000000000000);
 
-         // transfer half od the total stake to alice so not all the dividends will go to the committee_account
+         // transfer half of the total stake to alice so not all the dividends will go to the committee_account
          transfer( committee_account, alice_id, core.amount( 500000000000000 ) );
          generate_block();
 
@@ -70,17 +67,17 @@ BOOST_FIXTURE_TEST_SUITE( gpos_tests, database_fixture )
          // get core asset object
          const auto& dividend_holder_asset_object = get_asset("PPY");
 
-         // by default core token pays dividends once per day
+         // by default core token pays dividends once per month
          const auto& dividend_data = dividend_holder_asset_object.dividend_data(db);
          BOOST_CHECK_EQUAL(*dividend_data.options.payout_interval, 2592000); //  30 days
 
-         // update the payout interval for speed purposes of the tests
+         // update the payout interval for speed purposes of the test
          {
             asset_update_dividend_operation op;
             op.issuer = dividend_holder_asset_object.issuer;
             op.asset_to_update = dividend_holder_asset_object.id;
             op.new_options.next_payout_time = fc::time_point::now() + fc::minutes(1);
-            op.new_options.payout_interval = 60 * 60 * 24; // 1 days
+            op.new_options.payout_interval = 60 * 60 * 24; // 1 day
             trx.operations.push_back(op);
             set_expiration(db, trx);
             PUSH_TX(db, trx, ~0);
@@ -114,7 +111,7 @@ BOOST_FIXTURE_TEST_SUITE( gpos_tests, database_fixture )
             }
          }
 
-         // advance to next maint after payout time arraives
+         // advance to next maint after payout time arrives
          generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
          generate_block();
 
@@ -193,7 +190,6 @@ BOOST_FIXTURE_TEST_SUITE( gpos_tests, database_fixture )
          // check balances, payout paid to bob
          BOOST_CHECK_EQUAL(get_balance(bob_id(db), core), 1000 );
          BOOST_CHECK_EQUAL(get_balance(dividend_distribution_account, core), 0);
-
       }
       catch (fc::exception& e)
       {
@@ -203,8 +199,6 @@ BOOST_FIXTURE_TEST_SUITE( gpos_tests, database_fixture )
    }
    BOOST_AUTO_TEST_CASE( voting )
    {
-      wdump((db.head_block_time()));
-
       ACTORS((alice)(bob));
       try {
          const auto& core = asset_id_type()(db);
@@ -251,7 +245,7 @@ BOOST_FIXTURE_TEST_SUITE( gpos_tests, database_fixture )
             p.parameters.period_start =  now; // now
          });
 
-         wdump((db.head_block_time()));
+         //wdump((db.head_block_time()));
 
          BOOST_CHECK_EQUAL(db.get_global_properties().parameters.vesting_period, 518400);
          BOOST_CHECK_EQUAL(db.get_global_properties().parameters.vesting_subperiod, 86400);
@@ -288,10 +282,10 @@ BOOST_FIXTURE_TEST_SUITE( gpos_tests, database_fixture )
          generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
 
          auto alice_last_time_voted = alice_id(db).statistics(db).last_vote_time;
-         wdump((alice_last_time_voted));
+         //wdump((alice_last_time_voted));
 
-         wdump((db.head_block_time()));
-         wdump((fc::time_point_sec(db.get_global_properties().parameters.period_start)));
+         //wdump((db.head_block_time()));
+         //wdump((fc::time_point_sec(db.get_global_properties().parameters.period_start)));
 
          // vote decay as time pass
          witness1 = witness_id_type(1)(db);
@@ -300,7 +294,7 @@ BOOST_FIXTURE_TEST_SUITE( gpos_tests, database_fixture )
          generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
          generate_block();
 
-         wdump((db.head_block_time()));
+         //wdump((db.head_block_time()));
 
          witness1 = witness_id_type(1)(db);
          BOOST_CHECK_EQUAL(witness1.total_votes, 83);
@@ -335,6 +329,12 @@ BOOST_FIXTURE_TEST_SUITE( gpos_tests, database_fixture )
          witness1 = witness_id_type(1)(db);
          BOOST_CHECK_EQUAL(witness1.total_votes, 0);
 
+         // as more time pass vote from alice worth 0
+         generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
+         generate_block();
+
+         witness1 = witness_id_type(1)(db);
+         BOOST_CHECK_EQUAL(witness1.total_votes, 0);
       }
       catch (fc::exception &e) {
          edump((e.to_detail_string()));
