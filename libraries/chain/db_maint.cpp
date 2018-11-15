@@ -1351,33 +1351,19 @@ void database::perform_chain_maintenance(const signed_block& next_block, const g
             else
             {
                // its time to use vesting factor
-               // this is all testing, need real work here
 
-               // get last time this guy voted
-               //wdump((stake_account.get_id()));
-
-               //assume a last date voted
-               //fc::time_point_sec last_date_voted = time_point_sec(1541535074); //Tuesday, November 6, 2018 8:11:14 PM
-               //fc::time_point_sec last_date_voted = time_point_sec(1542065178); //Monday, November 12, 2018 11:26:18 PM
-
+               // get last time voted form stats
                fc::time_point_sec last_date_voted = stats.last_vote_time;
-               wdump((last_date_voted));
-               // vesting_period = 6 months by default
-               // vesting_subperiods = 1 month by default
 
-               // so
-               //auto vesting_period = fc::seconds(15552000); // 60x60x24x30x6
-               //auto vesting_subperiod = fc::seconds(2592000); // 60x60x24x30
+               // get global data related to gpos
                auto gpo = d.get_global_properties();
                auto vesting_period = fc::seconds(gpo.parameters.vesting_period);
                auto vesting_subperiod = fc::seconds(gpo.parameters.vesting_subperiod);
                auto period_start = time_point_sec(gpo.parameters.period_start);
 
-               //fc::time_point_sec period_start = time_point_sec(1541875137); // Saturday, November 10, 2018 6:38:57 PM
                fc::time_point_sec period_end = period_start + vesting_period;
 
                auto number_of_subperiods = vesting_period.count() / vesting_subperiod.count();
-               //wdump((number_of_subperiods));
 
                // assuming period_start > now && period_end < now
                // in what period are we now?
@@ -1391,84 +1377,41 @@ void database::perform_chain_maintenance(const signed_block& next_block, const g
                   if(period_seconds > gpo.parameters.vesting_subperiod * (i-1)
                      && period_seconds < gpo.parameters.vesting_subperiod * i) {
 
-                     //std::string weare = "we are in period: " + i;
-                     //wdump((i));
                      break;
                   }
                }
 
-               wdump((i));
+               // calculate n, need more checks here, it is still a bit ugly
+               double n = 7;
+               if(i > number_of_subperiods)
+                  n = 1;
 
-               vector<bool> voted_on_period;
-               // all hardcoded, change
-               double n = 6;
-               if(i == 1) {
-                  bool voted = false;
-                  if(last_date_voted < (period_start + fc::seconds(gpo.parameters.vesting_subperiod*i)) && last_date_voted > period_start) {
-                     n = 7;
-                     voted = true;
+               for(auto looper = 1; looper <= number_of_subperiods; looper++)
+               {
+                  if(looper == i)
+                  {
+                     for(auto inner_looper = 1; inner_looper <= looper; inner_looper++)
+                     {
+                        if(i-inner_looper > 0)
+                        {
+                           if(last_date_voted < (period_start + fc::seconds(gpo.parameters.vesting_subperiod*(i-inner_looper-1))) &&
+                              last_date_voted >= (period_start + fc::seconds(gpo.parameters.vesting_subperiod*(i-inner_looper))) &&
+                              last_date_voted >= period_start) {
+
+                              n = number_of_subperiods + 1;
+                              break;
+                           }
+                           else {
+                              n = number_of_subperiods - i + 2;
+                              break;
+                           }
+                        }
+                     }
                   }
-                  else {
-                     n = 6;
-                     voted = false;
-                  }
-                  voted_on_period.push_back(voted);
                }
 
-               else if(i == 2) {
-                  bool voted = false;
-                  if(last_date_voted < (period_start + fc::seconds(gpo.parameters.vesting_subperiod*i)) && last_date_voted > period_start) {
-                     n = 7;
-                     voted = true;
-                  }
-                  else {
-                     n = 5;
-                     voted = false;
-                  }
-                  voted_on_period.push_back(voted);
-               }
-
-               else if(i == 3) {
-                  bool voted = false;
-                  if(last_date_voted < (period_start + fc::seconds(gpo.parameters.vesting_subperiod*i)) && last_date_voted > period_start) {
-                     n = 7;
-                     voted = true;
-                  }
-                  else {
-                     n = 4;
-                     voted = false;
-                  }
-                  voted_on_period.push_back(voted);
-               }
-/*
-               wdump((last_date_voted));
-               wdump((period_start));
-               wdump((gpo.parameters.vesting_subperiod));
-               wdump((i));
-               wdump((fc::seconds(gpo.parameters.vesting_subperiod*i)));
-               wdump((n));
-*/
-
-               //wdump((voting_stake));
                double vesting_factor = (n - 1)/6;
-               //wdump((vesting_factor));
                voting_stake = (uint64_t)floor(voting_stake * vesting_factor);
-               //wdump((voting_stake));
-
-               //
-               /*
-               if(period_seconds < vesting_subperiod) {
-                  // we are in period 1, so N = 6
-
-
-                  // did he voted?
-
-                  // if yes go back to 1 for next period
-
-                  // if no, calculate coefficient
-
-               }
-               */
             }
 
             for( vote_id_type id : opinion_account.options.votes )
