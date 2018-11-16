@@ -1282,6 +1282,24 @@ void process_dividend_assets(database& db)
       }
 }
 
+void rolling_period_start(database& db)
+{
+   if(db.head_block_time() > HARDFORK_GPOS_TIME)
+   {
+      auto period_start = db.get_global_properties().parameters.period_start;
+      auto vesting_period = db.get_global_properties().parameters.vesting_period;
+
+      auto now = db.head_block_time().sec_since_epoch();
+      if(now > (period_start + vesting_period))
+      {
+         // roll
+         db.modify(db.get_global_properties(), [now](global_property_object& p) {
+            p.parameters.period_start =  now; // now
+         });
+      }
+   }
+}
+
 void database::perform_chain_maintenance(const signed_block& next_block, const global_property_object& global_props)
 {
    const auto& gpo = get_global_properties();
@@ -1290,6 +1308,8 @@ void database::perform_chain_maintenance(const signed_block& next_block, const g
    create_buyback_orders(*this);
 
    process_dividend_assets(*this);
+
+   rolling_period_start(*this);
 
    struct vote_tally_helper {
       database& d;
@@ -1371,38 +1391,40 @@ void database::perform_chain_maintenance(const signed_block& next_block, const g
                auto period_seconds = now.sec_since_epoch() - period_start.sec_since_epoch();
 
                // get in what period we are
-               int i = 1;
-               for(i = 1; i<=number_of_subperiods; i++)
+               int current_period = 1;
+               for(current_period = 1; current_period<=number_of_subperiods; current_period++)
                {
-                  if(period_seconds > gpo.parameters.vesting_subperiod * (i-1)
-                     && period_seconds < gpo.parameters.vesting_subperiod * i) {
+                  if(period_seconds > gpo.parameters.vesting_subperiod * (current_period-1)
+                     && period_seconds < gpo.parameters.vesting_subperiod * current_period) {
 
                      break;
                   }
                }
 
+               // coefficient calculation is: (n-1)/number_of_periods
+
                // calculate n, need more checks here, it is still a bit ugly
                double n = 7;
-               if(i > number_of_subperiods)
+               if(current_period > number_of_subperiods)
                   n = 1;
 
                for(auto looper = 1; looper <= number_of_subperiods; looper++)
                {
-                  if(looper == i)
+                  if(looper == current_period)
                   {
                      for(auto inner_looper = 1; inner_looper <= looper; inner_looper++)
                      {
-                        if(i-inner_looper > 0)
+                        if(current_period-inner_looper > 0)
                         {
-                           if(last_date_voted < (period_start + fc::seconds(gpo.parameters.vesting_subperiod*(i-inner_looper-1))) &&
-                              last_date_voted >= (period_start + fc::seconds(gpo.parameters.vesting_subperiod*(i-inner_looper))) &&
+                           if(last_date_voted < (period_start + fc::seconds(gpo.parameters.vesting_subperiod*(current_period-inner_looper-1))) &&
+                              last_date_voted >= (period_start + fc::seconds(gpo.parameters.vesting_subperiod*(current_period-inner_looper))) &&
                               last_date_voted >= period_start) {
 
                               n = number_of_subperiods + 1;
                               break;
                            }
                            else {
-                              n = number_of_subperiods - i + 2;
+                              n = number_of_subperiods - current_period + 2;
                               break;
                            }
                         }

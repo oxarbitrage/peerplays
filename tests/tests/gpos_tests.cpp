@@ -334,4 +334,80 @@ BOOST_AUTO_TEST_CASE( voting )
       throw;
    }
 }
+
+BOOST_AUTO_TEST_CASE( rolling_period_start )
+{
+   // period start need to roll automatically after HF
+   try {
+
+      // advance to HF
+      while( db.head_block_time() <= HARDFORK_GPOS_TIME )
+      {
+         generate_block();
+      }
+
+      // update default gpos global parameters to make this thing faster
+      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.vesting_period, 15552000);
+      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.vesting_subperiod, 2592000);
+      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.period_start, 1541875137);
+
+      auto now = db.head_block_time().sec_since_epoch();
+      db.modify(db.get_global_properties(), [now](global_property_object& p) {
+         p.parameters.vesting_period = 518400; // 60x60x24x6 = 6 days
+         p.parameters.vesting_subperiod = 86400; // 60x60x24 = 1 day
+         p.parameters.period_start =  now; // now
+      });
+
+      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.vesting_period, 518400);
+      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.vesting_subperiod, 86400);
+      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.period_start, now);
+      // end global changes
+
+      // lets be outside period:
+
+      generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
+      generate_block();
+      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.period_start, now);
+
+      generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
+      generate_block();
+      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.period_start, now);
+
+      generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
+      generate_block();
+      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.period_start, now);
+
+      generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
+      generate_block();
+      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.period_start, now);
+
+      generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
+      generate_block();
+      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.period_start, now);
+
+      generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
+      generate_block();
+      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.period_start, now);
+
+      generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
+      // rolling is here so getting the new now
+      now = db.head_block_time().sec_since_epoch();
+      generate_block();
+
+      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.period_start, now);
+
+      generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
+      generate_block();
+      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.period_start, now);
+
+      wdump((db.head_block_time()));
+      wdump((db.get_global_properties().parameters.period_start));
+
+   }
+   catch (fc::exception &e) {
+      edump((e.to_detail_string()));
+      throw;
+   }
+}
+
 BOOST_AUTO_TEST_SUITE_END()

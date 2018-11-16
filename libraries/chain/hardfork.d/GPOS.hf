@@ -1,4 +1,4 @@
-// GPOS HARDFORK  Friday, November 16, 2018 2:13:30 PM
+// GPOS HARDFORK Tuesday, November 20, 2018 11:15:43 AM
 #ifndef HARDFORK_GPOS_TIME
-#define HARDFORK_GPOS_TIME (fc::time_point_sec( 1542377610 ))
+#define HARDFORK_GPOS_TIME (fc::time_point_sec( 1542712543 ))
 #endif
