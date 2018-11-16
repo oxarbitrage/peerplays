@@ -26,6 +26,7 @@
 #include <graphene/chain/protocol/types.hpp>
 #include <fc/smart_ref_fwd.hpp>
 #include <fc/time.hpp>
+#include <graphene/chain/hardfork.hpp>
 
 namespace graphene { namespace chain { struct fee_schedule; } }
 /*
@@ -89,7 +90,7 @@ namespace graphene { namespace chain {
       /* gpos parameters constraints */
       uint32_t                vesting_period                      = VESTING_PERIOD; ///
       uint32_t                vesting_subperiod                   = VESTING_SUBPERIOD; ///
-      uint32_t                period_start                        = PERIOD_START; ///
+      uint32_t                period_start                        = HARDFORK_GPOS_TIME.sec_since_epoch(); ///
 
       extensions_type         extensions;
 

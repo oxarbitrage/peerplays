@@ -237,7 +237,7 @@ BOOST_AUTO_TEST_CASE( voting )
       // update default gpos global parameters to make this thing faster
       BOOST_CHECK_EQUAL(db.get_global_properties().parameters.vesting_period, 15552000);
       BOOST_CHECK_EQUAL(db.get_global_properties().parameters.vesting_subperiod, 2592000);
-      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.period_start, 1541875137);
+      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.period_start, HARDFORK_GPOS_TIME.sec_since_epoch());
 
       auto now = db.head_block_time().sec_since_epoch();
       db.modify(db.get_global_properties(), [now](global_property_object& p) {
@@ -349,7 +349,7 @@ BOOST_AUTO_TEST_CASE( rolling_period_start )
       // update default gpos global parameters to make this thing faster
       BOOST_CHECK_EQUAL(db.get_global_properties().parameters.vesting_period, 15552000);
       BOOST_CHECK_EQUAL(db.get_global_properties().parameters.vesting_subperiod, 2592000);
-      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.period_start, 1541875137);
+      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.period_start, HARDFORK_GPOS_TIME.sec_since_epoch());
 
       auto now = db.head_block_time().sec_since_epoch();
       db.modify(db.get_global_properties(), [now](global_property_object& p) {

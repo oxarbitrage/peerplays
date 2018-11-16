@@ -197,5 +197,3 @@
 
 #define VESTING_PERIOD                                      (60*60*24*30*6) // 6 months
 #define VESTING_SUBPERIOD                                   (60*60*24*30) // 1 month
-#define PERIOD_START                                        1541875137 // Saturday, November 10, 2018 6:38:57 PM
-
