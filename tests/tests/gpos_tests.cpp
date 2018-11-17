@@ -363,8 +363,7 @@ BOOST_AUTO_TEST_CASE( rolling_period_start )
       BOOST_CHECK_EQUAL(db.get_global_properties().parameters.period_start, now);
       // end global changes
 
-      // lets be outside period:
-
+      // moving outside period:
       generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
       generate_block();
       BOOST_CHECK_EQUAL(db.get_global_properties().parameters.period_start, now);
@@ -394,15 +393,26 @@ BOOST_AUTO_TEST_CASE( rolling_period_start )
       now = db.head_block_time().sec_since_epoch();
       generate_block();
 
+      // period start rolled
       BOOST_CHECK_EQUAL(db.get_global_properties().parameters.period_start, now);
+   }
+   catch (fc::exception &e) {
+      edump((e.to_detail_string()));
+      throw;
+   }
+}
+BOOST_AUTO_TEST_CASE( worker_dividends_voting )
+{
+   ACTORS((alice)(bob));
+   try {
+      const auto& core = asset_id_type()(db);
 
-      generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
+      // send some asset to alice
+      transfer( committee_account, alice_id, core.amount( 1000 ) );
       generate_block();
-      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.period_start, now);
 
-      wdump((db.head_block_time()));
-      wdump((db.get_global_properties().parameters.period_start));
-
+      // default maintenance_interval is 1 day
+      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.maintenance_interval, 86400);
    }
    catch (fc::exception &e) {
       edump((e.to_detail_string()));

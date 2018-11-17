@@ -1408,16 +1408,16 @@ void database::perform_chain_maintenance(const signed_block& next_block, const g
                if(current_period > number_of_subperiods)
                   n = 1;
 
-               for(auto looper = 1; looper <= number_of_subperiods; looper++)
+               for(auto subperiod = 1; subperiod <= number_of_subperiods; ++subperiod)
                {
-                  if(looper == current_period)
+                  if(subperiod == current_period)
                   {
-                     for(auto inner_looper = 1; inner_looper <= looper; inner_looper++)
+                     for(auto looper = 1; looper <= subperiod; ++looper)
                      {
-                        if(current_period-inner_looper > 0)
+                        if(current_period-looper > 0)
                         {
-                           if(last_date_voted < (period_start + fc::seconds(gpo.parameters.vesting_subperiod*(current_period-inner_looper-1))) &&
-                              last_date_voted >= (period_start + fc::seconds(gpo.parameters.vesting_subperiod*(current_period-inner_looper))) &&
+                           if(last_date_voted < (period_start + fc::seconds(gpo.parameters.vesting_subperiod*(current_period-looper-1))) &&
+                              last_date_voted >= (period_start + fc::seconds(gpo.parameters.vesting_subperiod*(current_period-looper))) &&
                               last_date_voted >= period_start) {
 
                               n = number_of_subperiods + 1;
