@@ -1377,13 +1377,14 @@ void database::perform_chain_maintenance(const signed_block& next_block, const g
 
                // get global data related to gpos
                auto gpo = d.get_global_properties();
-               auto vesting_period = fc::seconds(gpo.parameters.vesting_period);
-               auto vesting_subperiod = fc::seconds(gpo.parameters.vesting_subperiod);
+               auto vesting_period = gpo.parameters.vesting_period;
+               auto vesting_period_seconds = fc::seconds(vesting_period);
+               auto vesting_subperiod = gpo.parameters.vesting_subperiod;
+               auto vesting_subperiod_seconds = fc::seconds(vesting_subperiod);
                auto period_start = time_point_sec(gpo.parameters.period_start);
 
                fc::time_point_sec period_end = period_start + vesting_period;
-
-               auto number_of_subperiods = vesting_period.count() / vesting_subperiod.count();
+               auto number_of_subperiods = vesting_period / vesting_subperiod;
 
                // assuming period_start > now && period_end < now
                // in what period are we now?
@@ -1394,8 +1395,8 @@ void database::perform_chain_maintenance(const signed_block& next_block, const g
                int current_period = 1;
                for(current_period = 1; current_period<=number_of_subperiods; current_period++)
                {
-                  if(period_seconds > gpo.parameters.vesting_subperiod * (current_period-1)
-                     && period_seconds < gpo.parameters.vesting_subperiod * current_period) {
+                  if(period_seconds > vesting_subperiod * (current_period-1)
+                     && period_seconds < vesting_subperiod * current_period) {
 
                      break;
                   }
@@ -1416,15 +1417,13 @@ void database::perform_chain_maintenance(const signed_block& next_block, const g
                      {
                         if(current_period-looper > 0)
                         {
-                           if(last_date_voted < (period_start + fc::seconds(gpo.parameters.vesting_subperiod*(current_period-looper-1))) &&
-                              last_date_voted >= (period_start + fc::seconds(gpo.parameters.vesting_subperiod*(current_period-looper))) &&
+                           n = number_of_subperiods - current_period + 2;
+
+                           if(last_date_voted < (period_start + fc::seconds(vesting_subperiod*(current_period-looper-1))) &&
+                              last_date_voted >= (period_start + fc::seconds(vesting_subperiod*(current_period-looper))) &&
                               last_date_voted >= period_start) {
 
                               n = number_of_subperiods + 1;
-                              break;
-                           }
-                           else {
-                              n = number_of_subperiods - current_period + 2;
                               break;
                            }
                         }
