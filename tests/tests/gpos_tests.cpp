@@ -29,6 +29,7 @@
 #include <graphene/chain/witness_object.hpp>
 #include <graphene/chain/committee_member_object.hpp>
 #include <graphene/chain/vesting_balance_object.hpp>
+#include <graphene/chain/worker_object.hpp>
 
 #include "../common/database_fixture.hpp"
 
@@ -403,16 +404,213 @@ BOOST_AUTO_TEST_CASE( rolling_period_start )
 }
 BOOST_AUTO_TEST_CASE( worker_dividends_voting )
 {
-   ACTORS((alice)(bob));
    try {
-      const auto& core = asset_id_type()(db);
 
-      // send some asset to alice
-      transfer( committee_account, alice_id, core.amount( 1000 ) );
+      // advance to HF
+      while( db.head_block_time() <= HARDFORK_GPOS_TIME )
+      {
+         generate_block();
+      }
+
+      // update default gpos global parameters to 4 days
+      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.vesting_period, 15552000);
+      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.vesting_subperiod, 2592000);
+      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.period_start, HARDFORK_GPOS_TIME.sec_since_epoch());
+
+      auto now = db.head_block_time().sec_since_epoch();
+      db.modify(db.get_global_properties(), [now](global_property_object& p) {
+         p.parameters.vesting_period = 345600; // 60x60x24x4 = 4 days
+         p.parameters.vesting_subperiod = 86400; // 60x60x24 = 1 day
+         p.parameters.period_start =  now; // now
+      });
+
+      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.vesting_period, 345600);
+      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.vesting_subperiod, 86400);
+      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.period_start, now);
+      // end global changes
+
       generate_block();
 
-      // default maintenance_interval is 1 day
-      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.maintenance_interval, 86400);
+      set_expiration(db, trx);
+
+      ACTORS((nathan)(voter1)(voter2)(voter3));
+
+      const auto& core = asset_id_type()(db);
+
+      transfer( committee_account, nathan_id, core.amount( 1000 ) );
+      transfer( committee_account, voter1_id, core.amount( 1000 ) );
+      transfer( committee_account, voter2_id, core.amount( 1000 ) );
+
+      generate_block();
+
+      upgrade_to_lifetime_member(nathan_id);
+
+      // create a worker
+      {
+         worker_create_operation op;
+         op.owner = nathan_id;
+         op.daily_pay = 10;
+         op.initializer = vesting_balance_worker_initializer(1);
+         op.work_begin_date = db.head_block_time() + fc::days(1);
+         op.work_end_date = op.work_begin_date + fc::days(6);
+         trx.clear();
+         trx.operations.push_back(op);
+         sign( trx, nathan_private_key );
+         PUSH_TX( db, trx );
+      }
+      //generate_block();
+
+      auto worker = worker_id_type()(db);
+      BOOST_CHECK(worker.worker_account == nathan_id);
+      BOOST_CHECK(worker.daily_pay == 10);
+      BOOST_CHECK(worker.work_begin_date == db.head_block_time() + fc::days(1));
+      BOOST_CHECK(worker.work_end_date == db.head_block_time() + fc::days(7));
+      BOOST_CHECK(worker.vote_for.type() == vote_id_type::worker);
+      BOOST_CHECK(worker.vote_against.type() == vote_id_type::worker);
+
+      const vesting_balance_object& balance = worker.worker.get<vesting_balance_worker_type>().balance(db);
+      BOOST_CHECK(balance.owner == nathan_id);
+      BOOST_CHECK(balance.balance == asset(0));
+      BOOST_CHECK(balance.policy.get<cdd_vesting_policy>().vesting_seconds == fc::days(1).to_seconds());
+
+      // add some vesting to voter1
+      {
+         transaction trx;
+         vesting_balance_create_operation op;
+         op.fee = core.amount(0);
+         op.creator = voter1_id;
+         op.owner = voter1_id;
+         op.amount = core.amount(100);
+         //op.is_gpos = true; // need to add this to the op
+         //op.vesting_seconds = 60*60*24;
+         op.policy = cdd_vesting_policy_initializer{60 * 60 * 24};
+
+         trx.operations.push_back(op);
+         set_expiration(db, trx);
+         processed_transaction ptx = PUSH_TX(db, trx, ~0);
+      }
+      // check vesting
+
+      // add some vesting to voter2
+      {
+         transaction trx;
+         vesting_balance_create_operation op;
+         op.fee = core.amount(0);
+         op.creator = voter2_id;
+         op.owner = voter2_id;
+         op.amount = core.amount(100);
+         op.policy = cdd_vesting_policy_initializer{60 * 60 * 24};
+
+         trx.operations.push_back(op);
+         set_expiration(db, trx);
+         processed_transaction ptx = PUSH_TX(db, trx, ~0);
+      }
+      // check vesting at voter2
+
+      generate_block();
+
+      // vote against is not possible after HARDFORK_607_TIME
+      // samp[les in participation rewards are not reproducible
+
+      // vote for worker
+      {
+         signed_transaction trx;
+         account_update_operation op;
+         op.account = voter1_id;
+         op.new_options = voter1_id(db).options;
+         op.new_options->votes.insert(worker.vote_for);
+         trx.operations.push_back(op);
+         trx.validate();
+         set_expiration(db, trx);
+         sign(trx, voter1_private_key);
+         PUSH_TX(db, trx);
+         //trx.clear();
+      }
+
+      generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
+      generate_block();
+
+      // vote decay as time pass
+      //auto witness1 = witness_id_type(1)(db);
+      worker = worker_id_type()(db);
+      BOOST_CHECK_EQUAL(worker.total_votes_for, 100);
+      //BOOST_CHECK_EQUAL(worker.total_votes_against, 0);
+
+/*
+      // vote for worker with voter2
+      {
+         signed_transaction trx;
+         account_update_operation op;
+         op.account = voter2_id;
+         op.new_options = voter2_id(db).options;
+         op.new_options->votes.insert(worker.vote_against);
+         trx.operations.push_back(op);
+         trx.validate();
+         set_expiration(db, trx);
+         sign(trx, voter2_private_key);
+         PUSH_TX(db, trx);
+         //trx.clear();
+      }
+*/
+
+      // need special type of vesting so witnesses will not be paid dividends.
+      {
+         asset_reserve_operation op;
+         op.payer = account_id_type();
+         op.amount_to_reserve = asset(GRAPHENE_MAX_SHARE_SUPPLY/2);
+         trx.operations.push_back(op);
+         trx.validate();
+         set_expiration(db, trx);
+         PUSH_TX( db, trx, ~0 );
+         trx.clear();
+      }
+
+      BOOST_CHECK_EQUAL(worker_id_type()(db).worker.get<vesting_balance_worker_type>().balance(db).balance.amount.value, 0);
+      generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
+      //generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
+      BOOST_CHECK_EQUAL(worker_id_type()(db).worker.get<vesting_balance_worker_type>().balance(db).balance.amount.value, 10);
+      //generate_blocks(db.head_block_time() + fc::hours(12));
+
+
+      //generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
+      generate_block();
+
+      worker = worker_id_type()(db);
+      BOOST_CHECK_EQUAL(worker.total_votes_for, 75);
+
+      // get core asset object
+      const auto& dividend_holder_asset_object = get_asset("PPY");
+
+      // by default core token pays dividends once per month
+      const auto& dividend_data = dividend_holder_asset_object.dividend_data(db);
+      BOOST_CHECK_EQUAL(*dividend_data.options.payout_interval, 2592000); //  30 days
+
+      // update the payout interval for speed purposes of the test
+      {
+         asset_update_dividend_operation op;
+         op.issuer = dividend_holder_asset_object.issuer;
+         op.asset_to_update = dividend_holder_asset_object.id;
+         op.new_options.next_payout_time = fc::time_point::now() + fc::minutes(1);
+         op.new_options.payout_interval = 60 * 60 * 24; // 1 day
+         trx.operations.push_back(op);
+         set_expiration(db, trx);
+         PUSH_TX(db, trx, ~0);
+         trx.operations.clear();
+      }
+      generate_block();
+
+      // get the dividend distribution account
+      const account_object& dividend_distribution_account = dividend_data.dividend_distribution_account(db);
+
+      // transfering some coins to distribution account.
+      // simulating the blockchain haves some dividends to pay.
+      transfer( committee_account, dividend_distribution_account.id, core.amount( 100 ) );
+      generate_block();
+
+
+      generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
+
+      // witneses are getting paid dividends here! can use https://github.com/bitshares/bitshares-core/pull/1419
    }
    catch (fc::exception &e) {
       edump((e.to_detail_string()));

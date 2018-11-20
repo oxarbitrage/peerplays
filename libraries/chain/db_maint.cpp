@@ -1401,11 +1401,10 @@ void database::perform_chain_maintenance(const signed_block& next_block, const g
                      break;
                   }
                }
-
                // coefficient calculation is: (n-1)/number_of_periods
 
                // calculate n, need more checks here, it is still a bit ugly
-               double n = 7;
+               double n = number_of_subperiods + 1;
                if(current_period > number_of_subperiods)
                   n = 1;
 
@@ -1431,7 +1430,7 @@ void database::perform_chain_maintenance(const signed_block& next_block, const g
                   }
                }
 
-               double vesting_factor = (n - 1)/6;
+               double vesting_factor = (n - 1)/number_of_subperiods;
                voting_stake = (uint64_t)floor(voting_stake * vesting_factor);
             }
 
