@@ -755,21 +755,34 @@ void schedule_pending_dividend_balances(database& db,
    std::map<account_id_type, share_type> vesting_amounts;
    // get only once a collection of accounts that hold nonzero vesting balances of the dividend asset
    auto vesting_balances_begin =
-         vesting_index.indices().get<by_asset_balance>().lower_bound(
-               boost::make_tuple(dividend_holder_asset_obj.id));
+            vesting_index.indices().get<by_asset_balance>().lower_bound(
+                  boost::make_tuple(dividend_holder_asset_obj.id));
    auto vesting_balances_end =
-         vesting_index.indices().get<by_asset_balance>().upper_bound(
-               boost::make_tuple(dividend_holder_asset_obj.id, share_type()));
+            vesting_index.indices().get<by_asset_balance>().upper_bound(
+                  boost::make_tuple(dividend_holder_asset_obj.id, share_type()));
 
    uint64_t distribution_base_fee = gpo.parameters.current_fees->get<asset_dividend_distribution_operation>().distribution_base_fee;
    uint32_t distribution_fee_per_holder = gpo.parameters.current_fees->get<asset_dividend_distribution_operation>().distribution_fee_per_holder;
 
+   uint32_t holder_account_count = 0;
    for (const vesting_balance_object &vesting_balance_obj : boost::make_iterator_range(vesting_balances_begin,
                                                                                        vesting_balances_end)) {
-      vesting_amounts[vesting_balance_obj.owner] += vesting_balance_obj.balance.amount;
-      dlog("Vesting balance for account: ${owner}, amount: ${amount}",
-           ("owner", vesting_balance_obj.owner(db).name)
-           ("amount", vesting_balance_obj.balance.amount));
+      if(db.head_block_time() < HARDFORK_GPOS_TIME) {
+         vesting_amounts[vesting_balance_obj.owner] += vesting_balance_obj.balance.amount;
+         dlog("Vesting balance for account: ${owner}, amount: ${amount}",
+              ("owner", vesting_balance_obj.owner(db).name)
+                    ("amount", vesting_balance_obj.balance.amount));
+      }
+      else {
+         if(vesting_balance_obj.balance_type == vesting_balance_type::gpos) {
+            vesting_amounts[vesting_balance_obj.owner] += vesting_balance_obj.balance.amount;
+            dlog("Vesting balance for account: ${owner}, amount: ${amount}",
+                 ("owner", vesting_balance_obj.owner(db).name)
+                       ("amount", vesting_balance_obj.balance.amount));
+
+            ++holder_account_count;
+         }
+      }
    }
 
    auto current_distribution_account_balance_iter = current_distribution_account_balance_range.first;
@@ -780,7 +793,6 @@ void schedule_pending_dividend_balances(database& db,
               ("previous", std::distance(previous_distribution_account_balance_range.first,
                                          previous_distribution_account_balance_range.second)));
 
-   uint32_t holder_account_count;
    // get the list of accounts that hold nonzero balances of the dividend asset
    auto holder_balances_begin = balance_index.indices().get<by_asset_balance>().lower_bound(
          boost::make_tuple(dividend_holder_asset_obj.id));
@@ -789,9 +801,6 @@ void schedule_pending_dividend_balances(database& db,
 
    if(db.head_block_time() < HARDFORK_GPOS_TIME) {
       holder_account_count = std::distance(holder_balances_begin, holder_balances_end);
-   }
-   else {
-      holder_account_count = std::distance(vesting_balances_begin, vesting_balances_end);
    }
 
    // the fee, in BTS, for distributing each asset in the account
@@ -815,7 +824,7 @@ void schedule_pending_dividend_balances(database& db,
    } else {
       for (const vesting_balance_object &holder_balance_object : boost::make_iterator_range(vesting_balances_begin,
                                                                                             vesting_balances_end))
-         if (holder_balance_object.owner != dividend_data.dividend_distribution_account) {
+         if (holder_balance_object.owner != dividend_data.dividend_distribution_account && holder_balance_object.balance_type == vesting_balance_type::gpos) {
             total_balance_of_dividend_asset += holder_balance_object.balance.amount;
             auto itr = vesting_amounts.find(holder_balance_object.owner);
             if (itr != vesting_amounts.end())
@@ -987,7 +996,7 @@ void schedule_pending_dividend_balances(database& db,
                   // credit each account with their portion, don't send any back to the dividend distribution account
                   for (const vesting_balance_object &holder_balance_object : boost::make_iterator_range(
                         vesting_balances_begin, vesting_balances_end)) {
-                     if (holder_balance_object.owner == dividend_data.dividend_distribution_account) continue;
+                     if (holder_balance_object.owner == dividend_data.dividend_distribution_account || holder_balance_object.balance_type != vesting_balance_type::gpos) continue;
 
                      auto holder_balance = holder_balance_object.balance;
 
@@ -1284,7 +1293,7 @@ void process_dividend_assets(database& db)
 
 void rolling_period_start(database& db)
 {
-   if(db.head_block_time() > HARDFORK_GPOS_TIME)
+   if(db.head_block_time() >= HARDFORK_GPOS_TIME)
    {
       auto period_start = db.get_global_properties().parameters.period_start;
       auto vesting_period = db.get_global_properties().parameters.vesting_period;
@@ -1331,7 +1340,13 @@ void database::perform_chain_maintenance(const signed_block& next_block, const g
               vesting_index.indices().get<by_asset_balance>().upper_bound(boost::make_tuple(asset_id_type(), share_type()));
          for (const vesting_balance_object& vesting_balance_obj : boost::make_iterator_range(vesting_balances_begin, vesting_balances_end))
          {
-            vesting_amounts[vesting_balance_obj.owner] += vesting_balance_obj.balance.amount;
+            if(d.head_block_time() < HARDFORK_GPOS_TIME)
+               vesting_amounts[vesting_balance_obj.owner] += vesting_balance_obj.balance.amount;
+            else {
+               if(vesting_balance_obj.balance_type == vesting_balance_type::gpos) {
+                  vesting_amounts[vesting_balance_obj.owner] += vesting_balance_obj.balance.amount;
+               }
+            }
             //dlog("Vesting balance for account: ${owner}, amount: ${amount}",
             //     ("owner", vesting_balance_obj.owner(d).name)
             //     ("amount", vesting_balance_obj.balance.amount));
@@ -1353,7 +1368,6 @@ void database::perform_chain_maintenance(const signed_block& next_block, const g
                return;
 
             const account_object& opinion_account = *opinion_account_ptr;
-
 
             uint64_t voting_stake = 0;
 

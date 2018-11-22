@@ -126,6 +126,12 @@ namespace graphene { namespace chain {
       cdd_vesting_policy
       > vesting_policy;
 
+   enum class vesting_balance_type {   unspecified,
+      cashback,
+      worker,
+      witness,
+      gpos };
+
    /**
     * Vesting balance object is a balance that is locked by the blockchain for a period of time.
     */
@@ -144,7 +150,7 @@ namespace graphene { namespace chain {
          vesting_policy policy;
 
          /// vesting balance is for gpos purposes
-         bool is_gpos = false;
+         vesting_balance_type balance_type = vesting_balance_type::unspecified;
 
          vesting_balance_object() {}
 
@@ -177,27 +183,29 @@ namespace graphene { namespace chain {
     */
    struct by_account;
    struct by_asset_balance;
-   typedef multi_index_container<
+   struct by_asset_balance_type;
+
+      typedef multi_index_container<
       vesting_balance_object,
       indexed_by<
          ordered_unique< tag<by_id>, member< object, object_id_type, &object::id > >,
          ordered_non_unique< tag<by_account>,
             member<vesting_balance_object, account_id_type, &vesting_balance_object::owner>
          >,
-        ordered_non_unique< tag<by_asset_balance>,
-           composite_key<
-              vesting_balance_object,
-              member_offset<vesting_balance_object, asset_id_type, (size_t) (offset_s(vesting_balance_object,balance) + offset_s(asset,asset_id))>,
-              member_offset<vesting_balance_object, share_type, (size_t) (offset_s(vesting_balance_object,balance) + offset_s(asset,amount))>
-              //member<vesting_balance_object, account_id_type, &vesting_balance_object::owner>
-              //member_offset<vesting_balance_object, account_id_type, (size_t) (offset_s(vesting_balance_object,owner))>
-           >,
-           composite_key_compare<
-              std::less< asset_id_type >,
-              std::greater< share_type >
-              //std::less< account_id_type >
-           >
-        >
+         ordered_non_unique< tag<by_asset_balance>,
+            composite_key<
+                  vesting_balance_object,
+                  member_offset<vesting_balance_object, asset_id_type, (size_t) (offset_s(vesting_balance_object,balance) + offset_s(asset,asset_id))>,
+                  member_offset<vesting_balance_object, share_type, (size_t) (offset_s(vesting_balance_object,balance) + offset_s(asset,amount))>
+                  //member<vesting_balance_object, account_id_type, &vesting_balance_object::owner>
+                  //member_offset<vesting_balance_object, account_id_type, (size_t) (offset_s(vesting_balance_object,owner))>
+            >,
+            composite_key_compare<
+                  std::less< asset_id_type >,
+                  std::greater< share_type >
+                  //std::less< account_id_type >
+            >
+         >
       >
    > vesting_balance_multi_index_type;
    /**
@@ -227,5 +235,7 @@ FC_REFLECT_DERIVED(graphene::chain::vesting_balance_object, (graphene::db::objec
                    (owner)
                    (balance)
                    (policy)
-                   (is_gpos)
+                   (balance_type)
                   )
+
+FC_REFLECT_ENUM( graphene::chain::vesting_balance_type, (unspecified)(cashback)(worker)(witness)(gpos) )

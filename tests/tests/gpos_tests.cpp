@@ -157,10 +157,10 @@ BOOST_AUTO_TEST_CASE( dividends )
          op.creator = bob_id;
          op.owner = bob_id;
          op.amount = core.amount(100);
+         op.balance_type = vesting_balance_type::gpos;
          //op.vesting_seconds = 60*60*24;
          op.policy = cdd_vesting_policy_initializer{60 * 60 * 24};
          trx.operations.push_back(op);
-         //op.is_gpos = true; // need to add this to the op
          set_expiration(db, trx);
          processed_transaction ptx = PUSH_TX(db, trx, ~0);
       }
@@ -220,10 +220,9 @@ BOOST_AUTO_TEST_CASE( voting )
          op.creator = alice_id;
          op.owner = alice_id;
          op.amount = core.amount(100);
-         //op.is_gpos = true; // need to add this to the op
+         op.balance_type = vesting_balance_type::gpos;
          //op.vesting_seconds = 60*60*24;
          op.policy = cdd_vesting_policy_initializer{60 * 60 * 24};
-
          trx.operations.push_back(op);
          set_expiration(db, trx);
          processed_transaction ptx = PUSH_TX(db, trx, ~0);
@@ -481,7 +480,7 @@ BOOST_AUTO_TEST_CASE( worker_dividends_voting )
          op.creator = voter1_id;
          op.owner = voter1_id;
          op.amount = core.amount(100);
-         //op.is_gpos = true; // need to add this to the op
+         op.balance_type = vesting_balance_type::gpos;
          //op.vesting_seconds = 60*60*24;
          op.policy = cdd_vesting_policy_initializer{60 * 60 * 24};
 
@@ -499,13 +498,21 @@ BOOST_AUTO_TEST_CASE( worker_dividends_voting )
          op.creator = voter2_id;
          op.owner = voter2_id;
          op.amount = core.amount(100);
+         op.balance_type = vesting_balance_type::gpos;
          op.policy = cdd_vesting_policy_initializer{60 * 60 * 24};
-
          trx.operations.push_back(op);
          set_expiration(db, trx);
          processed_transaction ptx = PUSH_TX(db, trx, ~0);
       }
       // check vesting at voter2
+      // make sure the vesting balance is there
+      vector<vesting_balance_object> voter2_vesting_balances;
+      auto vesting_range = db.get_index_type<vesting_balance_index>().indices().get<by_account>().equal_range(voter2_id);
+      std::for_each(vesting_range.first, vesting_range.second,
+                    [&voter2_vesting_balances](const vesting_balance_object& balance) {
+                       voter2_vesting_balances.emplace_back(balance);
+                    });
+      BOOST_CHECK_EQUAL(voter2_vesting_balances[0].balance.amount.value, 100 );
 
       generate_block();
 
@@ -553,7 +560,7 @@ BOOST_AUTO_TEST_CASE( worker_dividends_voting )
       }
 */
 
-      // need special type of vesting so witnesses will not be paid dividends.
+      // send some asset to the reserve pool
       {
          asset_reserve_operation op;
          op.payer = account_id_type();
@@ -567,12 +574,7 @@ BOOST_AUTO_TEST_CASE( worker_dividends_voting )
 
       BOOST_CHECK_EQUAL(worker_id_type()(db).worker.get<vesting_balance_worker_type>().balance(db).balance.amount.value, 0);
       generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
-      //generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
       BOOST_CHECK_EQUAL(worker_id_type()(db).worker.get<vesting_balance_worker_type>().balance(db).balance.amount.value, 10);
-      //generate_blocks(db.head_block_time() + fc::hours(12));
-
-
-      //generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
       generate_block();
 
       worker = worker_id_type()(db);
@@ -607,10 +609,14 @@ BOOST_AUTO_TEST_CASE( worker_dividends_voting )
       transfer( committee_account, dividend_distribution_account.id, core.amount( 100 ) );
       generate_block();
 
-
       generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
 
-      // witneses are getting paid dividends here! can use https://github.com/bitshares/bitshares-core/pull/1419
+      // voter1 get paid dividends
+      BOOST_CHECK_EQUAL(get_balance(voter1_id(db), core), 950);
+
+      // voter2 get  paid dividends
+      BOOST_CHECK_EQUAL(get_balance(voter2_id(db), core), 950);
+
    }
    catch (fc::exception &e) {
       edump((e.to_detail_string()));
