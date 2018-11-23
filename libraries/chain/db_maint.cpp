@@ -518,7 +518,6 @@ void update_top_n_authorities( database& db )
              if( num_needed == 0 )
                 break;
          }
-         wdump((num_needed));
 
          db.modify( acct, [&]( account_object& a )
          {
@@ -770,15 +769,15 @@ void schedule_pending_dividend_balances(database& db,
       if(db.head_block_time() < HARDFORK_GPOS_TIME) {
          vesting_amounts[vesting_balance_obj.owner] += vesting_balance_obj.balance.amount;
          dlog("Vesting balance for account: ${owner}, amount: ${amount}",
-              ("owner", vesting_balance_obj.owner(db).name)
-                    ("amount", vesting_balance_obj.balance.amount));
+               ("owner", vesting_balance_obj.owner(db).name)
+               ("amount", vesting_balance_obj.balance.amount));
       }
       else {
          if(vesting_balance_obj.balance_type == vesting_balance_type::gpos) {
             vesting_amounts[vesting_balance_obj.owner] += vesting_balance_obj.balance.amount;
             dlog("Vesting balance for account: ${owner}, amount: ${amount}",
-                 ("owner", vesting_balance_obj.owner(db).name)
-                       ("amount", vesting_balance_obj.balance.amount));
+                  ("owner", vesting_balance_obj.owner(db).name)
+                  ("amount", vesting_balance_obj.balance.amount));
 
             ++holder_account_count;
          }
@@ -788,10 +787,10 @@ void schedule_pending_dividend_balances(database& db,
    auto current_distribution_account_balance_iter = current_distribution_account_balance_range.first;
    auto previous_distribution_account_balance_iter = previous_distribution_account_balance_range.first;
    dlog("Current balances in distribution account: ${current}, Previous balances: ${previous}",
-        ("current", std::distance(current_distribution_account_balance_range.first,
-                                  current_distribution_account_balance_range.second))
-              ("previous", std::distance(previous_distribution_account_balance_range.first,
-                                         previous_distribution_account_balance_range.second)));
+         ("current", std::distance(current_distribution_account_balance_range.first,
+                                   current_distribution_account_balance_range.second))
+         ("previous", std::distance(previous_distribution_account_balance_range.first,
+                                    previous_distribution_account_balance_range.second)));
 
    // get the list of accounts that hold nonzero balances of the dividend asset
    auto holder_balances_begin = balance_index.indices().get<by_asset_balance>().lower_bound(
@@ -826,9 +825,6 @@ void schedule_pending_dividend_balances(database& db,
                                                                                             vesting_balances_end))
          if (holder_balance_object.owner != dividend_data.dividend_distribution_account && holder_balance_object.balance_type == vesting_balance_type::gpos) {
             total_balance_of_dividend_asset += holder_balance_object.balance.amount;
-            auto itr = vesting_amounts.find(holder_balance_object.owner);
-            if (itr != vesting_amounts.end())
-               total_balance_of_dividend_asset += itr->second;
          }
    }
    // loop through all of the assets currently or previously held in the distribution account
@@ -999,10 +995,6 @@ void schedule_pending_dividend_balances(database& db,
                      if (holder_balance_object.owner == dividend_data.dividend_distribution_account || holder_balance_object.balance_type != vesting_balance_type::gpos) continue;
 
                      auto holder_balance = holder_balance_object.balance;
-
-                     auto itr = vesting_amounts.find(holder_balance_object.owner);
-                     if (itr != vesting_amounts.end())
-                        holder_balance += itr->second;
 
                      fc::uint128_t amount_to_credit(delta_balance.value);
                      amount_to_credit *= holder_balance.amount.value;

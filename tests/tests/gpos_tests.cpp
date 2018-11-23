@@ -617,6 +617,122 @@ BOOST_AUTO_TEST_CASE( worker_dividends_voting )
       // voter2 get  paid dividends
       BOOST_CHECK_EQUAL(get_balance(voter2_id(db), core), 950);
 
+      // how the worker is doing?
+      worker = worker_id_type()(db);
+      BOOST_CHECK_EQUAL(worker.total_votes_for, 50);
+
+      //is the worker still active?
+      // what is the worker thereshold?
+      wdump((worker));
+
+   }
+   catch (fc::exception &e) {
+      edump((e.to_detail_string()));
+      throw;
+   }
+}
+
+BOOST_AUTO_TEST_CASE( account_multiple_vesting )
+{
+   try {
+
+      ACTORS((sam)(patty));
+
+      const auto& core = asset_id_type()(db);
+
+      transfer( committee_account, sam_id, core.amount( 300 ) );
+      transfer( committee_account, patty_id, core.amount( 100 ) );
+
+      // advance to HF
+      while( db.head_block_time() <= HARDFORK_GPOS_TIME )
+      {
+         generate_block();
+      }
+      // add some vesting to voter2
+      {
+         transaction trx;
+         vesting_balance_create_operation op;
+         op.fee = core.amount(0);
+         op.creator = sam_id;
+         op.owner = sam_id;
+         op.amount = core.amount(100);
+         op.balance_type = vesting_balance_type::gpos;
+         op.policy = cdd_vesting_policy_initializer{60 * 60 * 24};
+         trx.operations.push_back(op);
+         set_expiration(db, trx);
+         processed_transaction ptx = PUSH_TX(db, trx, ~0);
+      }
+      // check vesting at voter2
+
+      // have another balance with 200 more
+      {
+         transaction trx;
+         vesting_balance_create_operation op;
+         op.fee = core.amount(0);
+         op.creator = sam_id;
+         op.owner = sam_id;
+         op.amount = core.amount(200);
+         op.balance_type = vesting_balance_type::gpos;
+         op.policy = cdd_vesting_policy_initializer{60 * 60 * 24};
+         trx.operations.push_back(op);
+         set_expiration(db, trx);
+         processed_transaction ptx = PUSH_TX(db, trx, ~0);
+      }
+
+
+      // patty also have vesting balance
+      {
+         transaction trx;
+         vesting_balance_create_operation op;
+         op.fee = core.amount(0);
+         op.creator = patty_id;
+         op.owner = patty_id;
+         op.amount = core.amount(100);
+         op.balance_type = vesting_balance_type::gpos;
+         op.policy = cdd_vesting_policy_initializer{60 * 60 * 24};
+         trx.operations.push_back(op);
+         set_expiration(db, trx);
+         processed_transaction ptx = PUSH_TX(db, trx, ~0);
+      }
+      // check vesting at patty
+
+      // get core asset object
+      const auto& dividend_holder_asset_object = get_asset("PPY");
+
+      // by default core token pays dividends once per month
+      const auto& dividend_data = dividend_holder_asset_object.dividend_data(db);
+      BOOST_CHECK_EQUAL(*dividend_data.options.payout_interval, 2592000); //  30 days
+
+      // update the payout interval for speed purposes of the test
+      {
+         asset_update_dividend_operation op;
+         op.issuer = dividend_holder_asset_object.issuer;
+         op.asset_to_update = dividend_holder_asset_object.id;
+         op.new_options.next_payout_time = fc::time_point::now() + fc::minutes(1);
+         op.new_options.payout_interval = 60 * 60 * 24; // 1 day
+         trx.operations.push_back(op);
+         set_expiration(db, trx);
+         PUSH_TX(db, trx, ~0);
+         trx.operations.clear();
+      }
+      generate_block();
+
+      // get the dividend distribution account
+      const account_object& dividend_distribution_account = dividend_data.dividend_distribution_account(db);
+
+      // transfering some coins to distribution account.
+      // simulating the blockchain haves some dividends to pay.
+      transfer( committee_account, dividend_distribution_account.id, core.amount( 100 ) );
+      generate_block();
+
+      generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
+
+      // sam get paid dividends
+      BOOST_CHECK_EQUAL(get_balance(sam_id(db), core), 75);
+
+      // patty also
+      BOOST_CHECK_EQUAL(get_balance(patty_id(db), core), 25);
+
    }
    catch (fc::exception &e) {
       edump((e.to_detail_string()));
