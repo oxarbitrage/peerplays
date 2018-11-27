@@ -723,6 +723,73 @@ void deprecate_annual_members( database& db )
    return;
 }
 
+double calculate_vesting_factor(const database& d, const account_object& stake_account)
+{
+   // get last time voted form stats
+   const auto &stats = stake_account.statistics(d);
+   fc::time_point_sec last_date_voted = stats.last_vote_time;
+
+   // get global data related to gpos
+   auto gpo = d.get_global_properties();
+   auto vesting_period = gpo.parameters.vesting_period;
+   auto vesting_period_seconds = fc::seconds(vesting_period);
+   auto vesting_subperiod = gpo.parameters.vesting_subperiod;
+   auto vesting_subperiod_seconds = fc::seconds(vesting_subperiod);
+   auto period_start = time_point_sec(gpo.parameters.period_start);
+
+   fc::time_point_sec period_end = period_start + vesting_period;
+   auto number_of_subperiods = vesting_period / vesting_subperiod;
+
+   // assuming period_start > now && period_end < now
+   // in what period are we now?
+   auto now = d.head_block_time();
+   auto period_seconds = now.sec_since_epoch() - period_start.sec_since_epoch();
+
+   // get in what period we are
+   int current_period = 1;
+   for(current_period = 1; current_period<=number_of_subperiods; current_period++)
+   {
+      if(period_seconds > vesting_subperiod * (current_period-1)
+         && period_seconds < vesting_subperiod * current_period) {
+
+         break;
+      }
+   }
+   // coefficient calculation is: (n-1)/number_of_periods
+
+   // calculate n, need more checks here, it is still a bit ugly
+   double n = number_of_subperiods + 1;
+   if(current_period > number_of_subperiods)
+      n = 1;
+
+   for(auto subperiod = 1; subperiod <= number_of_subperiods; ++subperiod)
+   {
+      if(subperiod == current_period)
+      {
+         for(auto looper = 1; looper <= subperiod; ++looper)
+         {
+            if(current_period-looper > 0)
+            {
+               n = number_of_subperiods - current_period + 2;
+
+               if(last_date_voted < (period_start + fc::seconds(vesting_subperiod*(current_period-looper-1))) &&
+                  last_date_voted >= (period_start + fc::seconds(vesting_subperiod*(current_period-looper))) &&
+                  last_date_voted >= period_start) {
+
+                  n = number_of_subperiods + 1;
+                  break;
+               }
+            }
+         }
+      }
+   }
+
+   double vesting_factor = (n - 1)/number_of_subperiods;
+   return vesting_factor;
+
+}
+
+
 // Schedules payouts from a dividend distribution account to the current holders of the
 // dividend-paying asset.  This takes any deposits made to the dividend distribution account
 // since the last time it was called, and distributes them to the current owners of the
@@ -736,7 +803,6 @@ void schedule_pending_dividend_balances(database& db,
                                         const total_distributed_dividend_balance_object_index& distributed_dividend_balance_index,
                                         const pending_dividend_payout_balance_for_holder_object_index& pending_payout_balance_index)
 {
-
    dlog("Processing dividend payments for dividend holder asset type ${holder_asset} at time ${t}",
         ("holder_asset", dividend_holder_asset_obj.symbol)("t", db.head_block_time()));
 
@@ -988,18 +1054,28 @@ void schedule_pending_dividend_balances(database& db,
                   }
                }
                else {
-
                   // credit each account with their portion, don't send any back to the dividend distribution account
                   for (const vesting_balance_object &holder_balance_object : boost::make_iterator_range(
                         vesting_balances_begin, vesting_balances_end)) {
                      if (holder_balance_object.owner == dividend_data.dividend_distribution_account || holder_balance_object.balance_type != vesting_balance_type::gpos) continue;
+
+                     auto vesting_factor = calculate_vesting_factor(db, holder_balance_object.owner(db));
 
                      auto holder_balance = holder_balance_object.balance;
 
                      fc::uint128_t amount_to_credit(delta_balance.value);
                      amount_to_credit *= holder_balance.amount.value;
                      amount_to_credit /= total_balance_of_dividend_asset.value;
-                     share_type shares_to_credit((int64_t) amount_to_credit.to_uint64());
+                     share_type full_shares_to_credit((int64_t) amount_to_credit.to_uint64());
+                     share_type shares_to_credit = (uint64_t)floor(full_shares_to_credit.value * vesting_factor);
+
+                     if(shares_to_credit < full_shares_to_credit) {
+                        // Todo: sending results of decay to committee account, need to change to specified account
+                        dlog("Crediting committee_account with ${amount}",
+                              ("amount", asset(full_shares_to_credit - shares_to_credit, payout_asset_type)));
+                        db.adjust_balance(dividend_data.dividend_distribution_account, -(full_shares_to_credit - shares_to_credit));
+                        db.adjust_balance(account_id_type(0), full_shares_to_credit - shares_to_credit);
+                     }
                      if (shares_to_credit.value) {
                         //wdump((delta_balance.value)(holder_balance)(total_balance_of_dividend_asset));
 
@@ -1376,67 +1452,7 @@ void database::perform_chain_maintenance(const signed_block& next_block, const g
             }
             else
             {
-               // its time to use vesting factor
-
-               // get last time voted form stats
-               fc::time_point_sec last_date_voted = stats.last_vote_time;
-
-               // get global data related to gpos
-               auto gpo = d.get_global_properties();
-               auto vesting_period = gpo.parameters.vesting_period;
-               auto vesting_period_seconds = fc::seconds(vesting_period);
-               auto vesting_subperiod = gpo.parameters.vesting_subperiod;
-               auto vesting_subperiod_seconds = fc::seconds(vesting_subperiod);
-               auto period_start = time_point_sec(gpo.parameters.period_start);
-
-               fc::time_point_sec period_end = period_start + vesting_period;
-               auto number_of_subperiods = vesting_period / vesting_subperiod;
-
-               // assuming period_start > now && period_end < now
-               // in what period are we now?
-               auto now = d.head_block_time();
-               auto period_seconds = now.sec_since_epoch() - period_start.sec_since_epoch();
-
-               // get in what period we are
-               int current_period = 1;
-               for(current_period = 1; current_period<=number_of_subperiods; current_period++)
-               {
-                  if(period_seconds > vesting_subperiod * (current_period-1)
-                     && period_seconds < vesting_subperiod * current_period) {
-
-                     break;
-                  }
-               }
-               // coefficient calculation is: (n-1)/number_of_periods
-
-               // calculate n, need more checks here, it is still a bit ugly
-               double n = number_of_subperiods + 1;
-               if(current_period > number_of_subperiods)
-                  n = 1;
-
-               for(auto subperiod = 1; subperiod <= number_of_subperiods; ++subperiod)
-               {
-                  if(subperiod == current_period)
-                  {
-                     for(auto looper = 1; looper <= subperiod; ++looper)
-                     {
-                        if(current_period-looper > 0)
-                        {
-                           n = number_of_subperiods - current_period + 2;
-
-                           if(last_date_voted < (period_start + fc::seconds(vesting_subperiod*(current_period-looper-1))) &&
-                              last_date_voted >= (period_start + fc::seconds(vesting_subperiod*(current_period-looper))) &&
-                              last_date_voted >= period_start) {
-
-                              n = number_of_subperiods + 1;
-                              break;
-                           }
-                        }
-                     }
-                  }
-               }
-
-               double vesting_factor = (n - 1)/number_of_subperiods;
+               auto vesting_factor = calculate_vesting_factor(d, stake_account);
                voting_stake = (uint64_t)floor(voting_stake * vesting_factor);
             }
 
