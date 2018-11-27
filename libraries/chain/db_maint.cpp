@@ -732,61 +732,61 @@ double calculate_vesting_factor(const database& d, const account_object& stake_a
    // get global data related to gpos
    auto gpo = d.get_global_properties();
    auto vesting_period = gpo.parameters.vesting_period;
-   auto vesting_period_seconds = fc::seconds(vesting_period);
    auto vesting_subperiod = gpo.parameters.vesting_subperiod;
-   auto vesting_subperiod_seconds = fc::seconds(vesting_subperiod);
    auto period_start = time_point_sec(gpo.parameters.period_start);
 
    fc::time_point_sec period_end = period_start + vesting_period;
    auto number_of_subperiods = vesting_period / vesting_subperiod;
 
-   // assuming period_start > now && period_end < now
-   // in what period are we now?
    auto now = d.head_block_time();
-   auto period_seconds = now.sec_since_epoch() - period_start.sec_since_epoch();
 
-   // get in what period we are
-   int current_period = 1;
-   for(current_period = 1; current_period<=number_of_subperiods; current_period++)
-   {
-      if(period_seconds > vesting_subperiod * (current_period-1)
-         && period_seconds < vesting_subperiod * current_period) {
+   double vesting_factor;
+   if(period_start <= now && now <= period_end) {
+      // in what period are we now?
 
-         break;
+      auto period_seconds = now.sec_since_epoch() - period_start.sec_since_epoch();
+
+      // get in what period we are
+      uint32_t current_period = 1;
+      for (current_period = 1; current_period <= number_of_subperiods; current_period++) {
+         if (period_seconds > vesting_subperiod * (current_period - 1)
+             && period_seconds < vesting_subperiod * current_period) {
+
+            break;
+         }
       }
-   }
-   // coefficient calculation is: (n-1)/number_of_periods
+      // coefficient calculation is: (n-1)/number_of_periods
 
-   // calculate n, need more checks here, it is still a bit ugly
-   double n = number_of_subperiods + 1;
-   if(current_period > number_of_subperiods)
-      n = 1;
+      // calculate n, need more checks here, it is still a bit ugly
+      double n = number_of_subperiods + 1;
+      if (current_period > number_of_subperiods)
+         n = 1;
 
-   for(auto subperiod = 1; subperiod <= number_of_subperiods; ++subperiod)
-   {
-      if(subperiod == current_period)
-      {
-         for(auto looper = 1; looper <= subperiod; ++looper)
-         {
-            if(current_period-looper > 0)
-            {
-               n = number_of_subperiods - current_period + 2;
+      for (uint32_t subperiod = 1; subperiod <= number_of_subperiods; ++subperiod) {
+         if (subperiod == current_period) {
+            for (uint32_t looper = 1; looper <= subperiod; ++looper) {
+               if (current_period - looper > 0) {
+                  n = number_of_subperiods - current_period + 2;
 
-               if(last_date_voted < (period_start + fc::seconds(vesting_subperiod*(current_period-looper-1))) &&
-                  last_date_voted >= (period_start + fc::seconds(vesting_subperiod*(current_period-looper))) &&
-                  last_date_voted >= period_start) {
+                  if (last_date_voted <
+                      (period_start + fc::seconds(vesting_subperiod * (current_period - looper - 1))) &&
+                      last_date_voted >= (period_start + fc::seconds(vesting_subperiod * (current_period - looper))) &&
+                      last_date_voted >= period_start) {
 
-                  n = number_of_subperiods + 1;
-                  break;
+                     n = number_of_subperiods + 1;
+                     break;
+                  }
                }
             }
          }
       }
+      vesting_factor = (n - 1) / number_of_subperiods;
    }
-
-   double vesting_factor = (n - 1)/number_of_subperiods;
+   else {
+      // 1 or 0 here?
+      vesting_factor = 1;
+   }
    return vesting_factor;
-
 }
 
 
