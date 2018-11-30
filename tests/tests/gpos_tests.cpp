@@ -748,5 +748,26 @@ BOOST_AUTO_TEST_CASE( account_multiple_vesting )
       throw;
    }
 }
+BOOST_AUTO_TEST_CASE( competing_proposals )
+{
+   try {
+
+
+   }
+   catch (fc::exception &e) {
+      edump((e.to_detail_string()));
+      throw;
+   }
+}
+BOOST_AUTO_TEST_CASE( proxy_voting )
+{
+   try {
+
+   }
+   catch (fc::exception &e) {
+      edump((e.to_detail_string()));
+      throw;
+   }
+}
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -742,10 +742,7 @@ double calculate_vesting_factor(const database& d, const account_object& stake_a
 
    double vesting_factor;
    if(period_start <= now && now <= period_end) {
-      // in what period are we now?
-
       auto period_seconds = now.sec_since_epoch() - period_start.sec_since_epoch();
-
       // get in what period we are
       uint32_t current_period = 1;
       for (current_period = 1; current_period <= number_of_subperiods; current_period++) {
@@ -755,7 +752,7 @@ double calculate_vesting_factor(const database& d, const account_object& stake_a
             break;
          }
       }
-      // coefficient calculation is: (n-1)/number_of_periods
+      // coefficient calculation is: (n-1)/number_of_subperiods
 
       // calculate n, need more checks here, it is still a bit ugly
       double n = number_of_subperiods + 1;
@@ -788,7 +785,6 @@ double calculate_vesting_factor(const database& d, const account_object& stake_a
    }
    return vesting_factor;
 }
-
 
 // Schedules payouts from a dividend distribution account to the current holders of the
 // dividend-paying asset.  This takes any deposits made to the dividend distribution account
@@ -864,9 +860,8 @@ void schedule_pending_dividend_balances(database& db,
    auto holder_balances_end = balance_index.indices().get<by_asset_balance>().upper_bound(
          boost::make_tuple(dividend_holder_asset_obj.id, share_type()));
 
-   if(db.head_block_time() < HARDFORK_GPOS_TIME) {
+   if(db.head_block_time() < HARDFORK_GPOS_TIME)
       holder_account_count = std::distance(holder_balances_begin, holder_balances_end);
-   }
 
    // the fee, in BTS, for distributing each asset in the account
    uint64_t total_fee_per_asset_in_core =
@@ -889,7 +884,8 @@ void schedule_pending_dividend_balances(database& db,
    } else {
       for (const vesting_balance_object &holder_balance_object : boost::make_iterator_range(vesting_balances_begin,
                                                                                             vesting_balances_end))
-         if (holder_balance_object.owner != dividend_data.dividend_distribution_account && holder_balance_object.balance_type == vesting_balance_type::gpos) {
+         if (holder_balance_object.owner != dividend_data.dividend_distribution_account &&
+               holder_balance_object.balance_type == vesting_balance_type::gpos) {
             total_balance_of_dividend_asset += holder_balance_object.balance.amount;
          }
    }
@@ -1024,6 +1020,7 @@ void schedule_pending_dividend_balances(database& db,
                      amount_to_credit *= holder_balance.value;
                      amount_to_credit /= total_balance_of_dividend_asset.value;
                      share_type shares_to_credit((int64_t) amount_to_credit.to_uint64());
+
                      if (shares_to_credit.value) {
                         //wdump((delta_balance.value)(holder_balance)(total_balance_of_dividend_asset));
 
@@ -1054,10 +1051,13 @@ void schedule_pending_dividend_balances(database& db,
                   }
                }
                else {
+                  // Todo: too much duplicated code here
+
                   // credit each account with their portion, don't send any back to the dividend distribution account
                   for (const vesting_balance_object &holder_balance_object : boost::make_iterator_range(
                         vesting_balances_begin, vesting_balances_end)) {
-                     if (holder_balance_object.owner == dividend_data.dividend_distribution_account || holder_balance_object.balance_type != vesting_balance_type::gpos) continue;
+                     if (holder_balance_object.owner == dividend_data.dividend_distribution_account ||
+                           holder_balance_object.balance_type != vesting_balance_type::gpos) continue;
 
                      auto vesting_factor = calculate_vesting_factor(db, holder_balance_object.owner(db));
 
@@ -1076,6 +1076,7 @@ void schedule_pending_dividend_balances(database& db,
                         db.adjust_balance(dividend_data.dividend_distribution_account, -(full_shares_to_credit - shares_to_credit));
                         db.adjust_balance(account_id_type(0), full_shares_to_credit - shares_to_credit);
                      }
+
                      if (shares_to_credit.value) {
                         //wdump((delta_balance.value)(holder_balance)(total_balance_of_dividend_asset));
 
@@ -1371,7 +1372,7 @@ void rolling_period_start(database& db)
       {
          // roll
          db.modify(db.get_global_properties(), [now](global_property_object& p) {
-            p.parameters.period_start =  now; // now
+            p.parameters.period_start =  now;
          });
       }
    }
