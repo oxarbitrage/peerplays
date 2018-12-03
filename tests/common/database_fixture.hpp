@@ -289,6 +289,7 @@ struct database_fixture {
                                       const fc::microseconds& duration = fc::days(2));
    const vesting_balance_object& create_vesting(const account_id_type owner, const asset amount,
                                                 const vesting_balance_type type = vesting_balance_type::unspecified);
+   void update_payout_interval(std::string asset_name, fc::time_point start, uint32_t interval);
 };
 
 namespace test {

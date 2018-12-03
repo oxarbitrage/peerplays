@@ -1119,6 +1119,20 @@ const vesting_balance_object& database_fixture::create_vesting(const account_id_
 
 } FC_CAPTURE_AND_RETHROW() }
 
+void database_fixture::update_payout_interval(std::string asset_name, fc::time_point start, uint32_t interval)
+{ try {
+   auto dividend_holder_asset_object = get_asset(asset_name);
+   asset_update_dividend_operation op;
+   op.issuer = dividend_holder_asset_object.issuer;
+   op.asset_to_update = dividend_holder_asset_object.id;
+   op.new_options.next_payout_time = start;
+   op.new_options.payout_interval = interval;
+   trx.operations.push_back(op);
+   set_expiration(db, trx);
+   PUSH_TX(db, trx, ~0);
+   trx.operations.clear();
+} FC_CAPTURE_AND_RETHROW() }
+
 namespace test {
 
 void set_expiration( const database& db, transaction& tx )

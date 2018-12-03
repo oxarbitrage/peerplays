@@ -73,17 +73,8 @@ BOOST_AUTO_TEST_CASE( dividends )
       BOOST_CHECK_EQUAL(*dividend_data.options.payout_interval, 2592000); //  30 days
 
       // update the payout interval for speed purposes of the test
-      {
-         asset_update_dividend_operation op;
-         op.issuer = dividend_holder_asset_object.issuer;
-         op.asset_to_update = dividend_holder_asset_object.id;
-         op.new_options.next_payout_time = fc::time_point::now() + fc::minutes(1);
-         op.new_options.payout_interval = 60 * 60 * 24; // 1 day
-         trx.operations.push_back(op);
-         set_expiration(db, trx);
-         PUSH_TX(db, trx, ~0);
-         trx.operations.clear();
-      }
+      update_payout_interval(core.symbol, fc::time_point::now() + fc::minutes(1), 60 * 60 * 24); // 1 day
+
       generate_block();
 
       BOOST_CHECK_EQUAL(*dividend_data.options.payout_interval, 86400); // 1 day now
@@ -406,17 +397,8 @@ BOOST_AUTO_TEST_CASE( worker_dividends_voting )
       BOOST_CHECK_EQUAL(*dividend_data.options.payout_interval, 2592000); //  30 days
 
       // update the payout interval to 1 day for speed purposes of the test
-      {
-         asset_update_dividend_operation op;
-         op.issuer = dividend_holder_asset_object.issuer;
-         op.asset_to_update = dividend_holder_asset_object.id;
-         op.new_options.next_payout_time = fc::time_point::now() + fc::minutes(1);
-         op.new_options.payout_interval = 60 * 60 * 24; // 1 day
-         trx.operations.push_back(op);
-         set_expiration(db, trx);
-         PUSH_TX(db, trx, ~0);
-         trx.operations.clear();
-      }
+      update_payout_interval(core.symbol, fc::time_point::now() + fc::minutes(1), 60 * 60 * 24); // 1 day
+
       generate_block();
 
       // get the dividend distribution account
@@ -578,17 +560,8 @@ BOOST_AUTO_TEST_CASE( account_multiple_vesting )
       BOOST_CHECK_EQUAL(*dividend_data.options.payout_interval, 2592000); //  30 days
 
       // update the payout interval for speed purposes of the test
-      {
-         asset_update_dividend_operation op;
-         op.issuer = dividend_holder_asset_object.issuer;
-         op.asset_to_update = dividend_holder_asset_object.id;
-         op.new_options.next_payout_time = fc::time_point::now() + fc::minutes(1);
-         op.new_options.payout_interval = 60 * 60 * 24; // 1 day
-         trx.operations.push_back(op);
-         set_expiration(db, trx);
-         PUSH_TX(db, trx, ~0);
-         trx.operations.clear();
-      }
+      update_payout_interval(core.symbol, fc::time_point::now() + fc::minutes(1), 60 * 60 * 24); // 1 day
+
       generate_block();
 
       // get the dividend distribution account
