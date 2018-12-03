@@ -150,30 +150,9 @@ BOOST_AUTO_TEST_CASE( dividends )
       BOOST_CHECK_EQUAL(get_balance(dividend_distribution_account, core), 100);
 
       // lets create a vesting and see what happens
-      {
-         transaction trx;
-         vesting_balance_create_operation op;
-         op.fee = core.amount(0);
-         op.creator = bob_id;
-         op.owner = bob_id;
-         op.amount = core.amount(100);
-         op.balance_type = vesting_balance_type::gpos;
-         //op.vesting_seconds = 60*60*24;
-         op.policy = cdd_vesting_policy_initializer{60 * 60 * 24};
-         trx.operations.push_back(op);
-         set_expiration(db, trx);
-         processed_transaction ptx = PUSH_TX(db, trx, ~0);
-      }
-      generate_block();
+      create_vesting(bob_id, core.amount(100), vesting_balance_type::gpos);
 
-      // make sure the vesting balance is there
-      vector<vesting_balance_object> bob_vesting_balances;
-      auto vesting_range = db.get_index_type<vesting_balance_index>().indices().get<by_account>().equal_range(bob_id);
-      std::for_each(vesting_range.first, vesting_range.second,
-                    [&bob_vesting_balances](const vesting_balance_object& balance) {
-                       bob_vesting_balances.emplace_back(balance);
-                    });
-      BOOST_CHECK_EQUAL(bob_vesting_balances[0].balance.amount.value, 100 );
+      generate_block();
 
       // check balances
       BOOST_CHECK_EQUAL(get_balance(bob_id(db), core), 900 );
@@ -213,20 +192,7 @@ BOOST_AUTO_TEST_CASE( voting )
       BOOST_CHECK_EQUAL(db.get_global_properties().parameters.maintenance_interval, 86400);
 
       // add some vesting to alice
-      {
-         transaction trx;
-         vesting_balance_create_operation op;
-         op.fee = core.amount(0);
-         op.creator = alice_id;
-         op.owner = alice_id;
-         op.amount = core.amount(100);
-         op.balance_type = vesting_balance_type::gpos;
-         //op.vesting_seconds = 60*60*24;
-         op.policy = cdd_vesting_policy_initializer{60 * 60 * 24};
-         trx.operations.push_back(op);
-         set_expiration(db, trx);
-         processed_transaction ptx = PUSH_TX(db, trx, ~0);
-      }
+      create_vesting(alice_id, core.amount(100), vesting_balance_type::gpos);
 
       // advance to HF
       while( db.head_block_time() <= HARDFORK_GPOS_TIME )
@@ -471,80 +437,15 @@ BOOST_AUTO_TEST_CASE( worker_dividends_voting )
 
       upgrade_to_lifetime_member(nathan_id);
 
-      // create a worker
-      {
-         worker_create_operation op;
-         op.owner = nathan_id;
-         op.daily_pay = 10;
-         op.initializer = vesting_balance_worker_initializer(1);
-         op.work_begin_date = db.head_block_time() + fc::days(1);
-         op.work_end_date = op.work_begin_date + fc::days(6);
-         trx.clear();
-         trx.operations.push_back(op);
-         sign( trx, nathan_private_key );
-         PUSH_TX( db, trx );
-      }
-
-
-      auto worker = worker_id_type()(db);
-      /* worker checks ?
-      BOOST_CHECK(worker.worker_account == nathan_id);
-      BOOST_CHECK(worker.daily_pay == 10);
-      BOOST_CHECK(worker.work_begin_date == db.head_block_time() + fc::days(1));
-      BOOST_CHECK(worker.work_end_date == db.head_block_time() + fc::days(7));
-      BOOST_CHECK(worker.vote_for.type() == vote_id_type::worker);
-      BOOST_CHECK(worker.vote_against.type() == vote_id_type::worker);
-
-      const vesting_balance_object& balance = worker.worker.get<vesting_balance_worker_type>().balance(db);
-      BOOST_CHECK(balance.owner == nathan_id);
-      BOOST_CHECK(balance.balance == asset(0));
-      BOOST_CHECK(balance.policy.get<cdd_vesting_policy>().vesting_seconds == fc::days(1).to_seconds());
-      */
+      auto worker = create_worker(nathan_id, 10, fc::days(6));
+      auto worker_id = worker.id;
 
       // add some vesting to voter1
-      {
-         transaction trx;
-         vesting_balance_create_operation op;
-         op.fee = core.amount(0);
-         op.creator = voter1_id;
-         op.owner = voter1_id;
-         op.amount = core.amount(100);
-         op.balance_type = vesting_balance_type::gpos;
-         //op.vesting_seconds = 60*60*24;
-         op.policy = cdd_vesting_policy_initializer{60 * 60 * 24};
-
-         trx.operations.push_back(op);
-         set_expiration(db, trx);
-         processed_transaction ptx = PUSH_TX(db, trx, ~0);
-      }
-      // check vesting
+      create_vesting(voter1_id, core.amount(100), vesting_balance_type::gpos);
 
       // add some vesting to voter2
-      {
-         transaction trx;
-         vesting_balance_create_operation op;
-         op.fee = core.amount(0);
-         op.creator = voter2_id;
-         op.owner = voter2_id;
-         op.amount = core.amount(100);
-         op.balance_type = vesting_balance_type::gpos;
-         op.policy = cdd_vesting_policy_initializer{60 * 60 * 24};
-         trx.operations.push_back(op);
-         set_expiration(db, trx);
-         processed_transaction ptx = PUSH_TX(db, trx, ~0);
-      }
+      create_vesting(voter2_id, core.amount(100), vesting_balance_type::gpos);
 
-      /* vesting chexks, needed?
-      // check vesting at voter2
-      // make sure the vesting balance is there
-      vector<vesting_balance_object> voter2_vesting_balances;
-      auto vesting_range = db.get_index_type<vesting_balance_index>().indices().get<by_account>().equal_range(voter2_id);
-      std::for_each(vesting_range.first, vesting_range.second,
-                    [&voter2_vesting_balances](const vesting_balance_object& balance) {
-                       voter2_vesting_balances.emplace_back(balance);
-                    });
-      BOOST_CHECK_EQUAL(voter2_vesting_balances[0].balance.amount.value, 100 );
-      */
       generate_block();
 
       // vote against is not possible after HARDFORK_607_TIME
@@ -596,11 +497,14 @@ BOOST_AUTO_TEST_CASE( worker_dividends_voting )
          trx.clear();
       }
 
-      BOOST_CHECK_EQUAL(worker_id_type()(db).worker.get<vesting_balance_worker_type>().balance(db).balance.amount.value, 0);
+      //BOOST_CHECK_EQUAL(worker_id_type()(db).worker.get<vesting_balance_worker_type>().balance(db).balance.amount.value, 0);
+      //BOOST_CHECK_EQUAL(worker.worker.get<vesting_balance_worker_type>().balance(db).balance.amount.value, 0);
 
       // worker is getting paid
       generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
-      BOOST_CHECK_EQUAL(worker_id_type()(db).worker.get<vesting_balance_worker_type>().balance(db).balance.amount.value, 10);
+      //BOOST_CHECK_EQUAL(worker_id_type()(db).worker.get<vesting_balance_worker_type>().balance(db).balance.amount.value, 10);
+      //BOOST_CHECK_EQUAL(worker.worker.get<vesting_balance_worker_type>().balance(db).balance.amount.value, 10);
+
       generate_block();
 
       // second maint pass, coefficient will be 0.75
@@ -657,53 +561,14 @@ BOOST_AUTO_TEST_CASE( account_multiple_vesting )
       {
          generate_block();
       }
-      // add some vesting to voter2
-      {
-         transaction trx;
-         vesting_balance_create_operation op;
-         op.fee = core.amount(0);
-         op.creator = sam_id;
-         op.owner = sam_id;
-         op.amount = core.amount(100);
-         op.balance_type = vesting_balance_type::gpos;
-         op.policy = cdd_vesting_policy_initializer{60 * 60 * 24};
-         trx.operations.push_back(op);
-         set_expiration(db, trx);
-         processed_transaction ptx = PUSH_TX(db, trx, ~0);
-      }
-      // check vesting at voter2
+      // add some vesting to sam
+      create_vesting(sam_id, core.amount(100), vesting_balance_type::gpos);
 
       // have another balance with 200 more
-      {
-         transaction trx;
-         vesting_balance_create_operation op;
-         op.fee = core.amount(0);
-         op.creator = sam_id;
-         op.owner = sam_id;
-         op.amount = core.amount(200);
-         op.balance_type = vesting_balance_type::gpos;
-         op.policy = cdd_vesting_policy_initializer{60 * 60 * 24};
-         trx.operations.push_back(op);
-         set_expiration(db, trx);
-         processed_transaction ptx = PUSH_TX(db, trx, ~0);
-      }
-
+      create_vesting(sam_id, core.amount(200), vesting_balance_type::gpos);
 
       // patty also have vesting balance
-      {
-         transaction trx;
-         vesting_balance_create_operation op;
-         op.fee = core.amount(0);
-         op.creator = patty_id;
-         op.owner = patty_id;
-         op.amount = core.amount(100);
-         op.balance_type = vesting_balance_type::gpos;
-         op.policy = cdd_vesting_policy_initializer{60 * 60 * 24};
-         trx.operations.push_back(op);
-         set_expiration(db, trx);
-         processed_transaction ptx = PUSH_TX(db, trx, ~0);
-      }
-      // check vesting at patty
+      create_vesting(patty_id, core.amount(100), vesting_balance_type::gpos);
 
       // get core asset object
       const auto& dividend_holder_asset_object = get_asset("PPY");
@@ -752,6 +617,36 @@ BOOST_AUTO_TEST_CASE( competing_proposals )
 {
    try {
 
+      ACTORS((worker1)(worker2));
+
+      const auto& core = asset_id_type()(db);
+      generate_block();
+
+      transfer( committee_account, worker1_id, core.amount( 1000 ) );
+      transfer( committee_account, worker2_id, core.amount( 1000 ) );
+
+      /*
+      // advance to HF
+      while( db.head_block_time() <= HARDFORK_GPOS_TIME )
+      {
+         generate_block();
+      }
+      */
+
+
+
+
+      upgrade_to_lifetime_member(worker1_id);
+      upgrade_to_lifetime_member(worker2_id);
+
+      auto w1 = create_worker(worker1_id, 10, fc::days(6));
+      auto w2 = create_worker(worker2_id, 10, fc::days(6));
+
+      wdump((w1));
+      wdump((w2));
+
+
+      generate_block();
 
    }
    catch (fc::exception &e) {
@@ -760,6 +655,17 @@ BOOST_AUTO_TEST_CASE( competing_proposals )
    }
 }
 BOOST_AUTO_TEST_CASE( proxy_voting )
+{
+   try {
+
+   }
+   catch (fc::exception &e) {
+      edump((e.to_detail_string()));
+      throw;
+   }
+}
+
+BOOST_AUTO_TEST_CASE( noncore )
 {
    try {
 

@@ -37,6 +37,7 @@
 #include <graphene/chain/vesting_balance_object.hpp>
 #include <graphene/chain/witness_object.hpp>
 #include <graphene/chain/tournament_object.hpp>
+#include <graphene/chain/worker_object.hpp>
 
 #include <graphene/utilities/tempdir.hpp>
 
@@ -1081,6 +1082,42 @@ vector< operation_history_object > database_fixture::get_operation_history( acco
    }
    return result;
 }
+
+// gpos stuff
+const worker_object& database_fixture::create_worker( const account_id_type owner, const share_type daily_pay,
+                                                      const fc::microseconds& duration )
+{ try {
+   worker_create_operation op;
+   op.owner = owner;
+   op.daily_pay = daily_pay;
+   op.initializer = burn_worker_initializer();
+   op.work_begin_date = db.head_block_time();
+   op.work_end_date = op.work_begin_date + duration;
+   trx.operations.push_back(op);
+   trx.validate();
+   processed_transaction ptx = db.push_transaction(trx, ~0);
+   trx.clear();
+   return db.get<worker_object>(ptx.operation_results[0].get<object_id_type>());
+} FC_CAPTURE_AND_RETHROW() }
+
+const vesting_balance_object& database_fixture::create_vesting(const account_id_type owner, const asset amount,
+                                                               const vesting_balance_type type)
+{ try {
+   vesting_balance_create_operation op;
+   //op.fee = core.amount(0);
+   op.creator = owner;
+   op.owner = owner;
+   op.amount = amount;
+   op.balance_type = vesting_balance_type::gpos;
+   op.policy = cdd_vesting_policy_initializer{60 * 60 * 24};
+
+   trx.operations.push_back(op);
+   set_expiration(db, trx);
+   processed_transaction ptx = PUSH_TX(db, trx, ~0);
+   trx.clear();
+   return db.get<vesting_balance_object>(ptx.operation_results[0].get<object_id_type>());
+
+} FC_CAPTURE_AND_RETHROW() }
 
 namespace test {
 
