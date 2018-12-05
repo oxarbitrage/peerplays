@@ -158,7 +158,7 @@ BOOST_AUTO_TEST_CASE( dividends )
          }
       }
 
-      // make sure not dividends were paid
+      // make sure no dividends were paid
       BOOST_CHECK_EQUAL(get_balance(committee_account(db), core), 499999999998850 );
       BOOST_CHECK_EQUAL(get_balance(alice_id(db), core), 500000000000050 );
       BOOST_CHECK_EQUAL(get_balance(bob_id(db), core), 1000 );
@@ -182,7 +182,7 @@ BOOST_AUTO_TEST_CASE( dividends )
       }
       generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
 
-      // check balances, payout paid to bob
+      // check balances, dividends paid to bob
       BOOST_CHECK_EQUAL(get_balance(bob_id(db), core), 1000 );
       BOOST_CHECK_EQUAL(get_balance(dividend_distribution_account, core), 0);
    }
@@ -315,34 +315,16 @@ BOOST_AUTO_TEST_CASE( rolling_period_start )
 
       // update default gpos global parameters to make this thing faster
       auto now = db.head_block_time().sec_since_epoch();
+      auto wat = db.head_block_time();
       update_gpos_global(518400, 86400, now);
 
       // moving outside period:
+      while( db.head_block_time() <= wat + fc::days(6) )
+      {
+         generate_block();
+      }
       generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
-      generate_block();
-      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.period_start, now);
 
-      generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
-      generate_block();
-      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.period_start, now);
-
-      generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
-      generate_block();
-      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.period_start, now);
-
-      generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
-      generate_block();
-      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.period_start, now);
-
-      generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
-      generate_block();
-      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.period_start, now);
-
-      generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
-      generate_block();
-      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.period_start, now);
-
-      generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
       // rolling is here so getting the new now
       now = db.head_block_time().sec_since_epoch();
       generate_block();
