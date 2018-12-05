@@ -36,7 +36,19 @@
 using namespace graphene::chain;
 using namespace graphene::chain::test;
 
-BOOST_FIXTURE_TEST_SUITE( gpos_tests, database_fixture )
+struct gpos_fixture: database_fixture
+{
+   void update_gpos_global(uint32_t vesting_period, uint32_t vesting_subperiod, uint32_t period_start)
+   {
+      db.modify(db.get_global_properties(), [vesting_period, vesting_subperiod, period_start](global_property_object& p) {
+         p.parameters.vesting_period = vesting_period;
+         p.parameters.vesting_subperiod = vesting_subperiod;
+         p.parameters.period_start =  period_start;
+      });
+   }
+};
+
+BOOST_FIXTURE_TEST_SUITE( gpos_tests, gpos_fixture )
 
 BOOST_AUTO_TEST_CASE( dividends )
 {
@@ -197,11 +209,9 @@ BOOST_AUTO_TEST_CASE( voting )
       BOOST_CHECK_EQUAL(db.get_global_properties().parameters.period_start, HARDFORK_GPOS_TIME.sec_since_epoch());
 
       auto now = db.head_block_time().sec_since_epoch();
-      db.modify(db.get_global_properties(), [now](global_property_object& p) {
-         p.parameters.vesting_period = 518400; // 60x60x24x6 = 6 days
-         p.parameters.vesting_subperiod = 86400; // 60x60x24 = 1 day
-         p.parameters.period_start =  now; // now
-      });
+      // 518400 = 60x60x24x6 = 6 days
+      // 86400 = 60x60x24 = 1 day
+      update_gpos_global(518400, 86400, now);
 
       BOOST_CHECK_EQUAL(db.get_global_properties().parameters.vesting_period, 518400);
       BOOST_CHECK_EQUAL(db.get_global_properties().parameters.vesting_subperiod, 86400);
@@ -304,21 +314,8 @@ BOOST_AUTO_TEST_CASE( rolling_period_start )
       }
 
       // update default gpos global parameters to make this thing faster
-      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.vesting_period, 15552000);
-      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.vesting_subperiod, 2592000);
-      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.period_start, HARDFORK_GPOS_TIME.sec_since_epoch());
-
       auto now = db.head_block_time().sec_since_epoch();
-      db.modify(db.get_global_properties(), [now](global_property_object& p) {
-         p.parameters.vesting_period = 518400; // 60x60x24x6 = 6 days
-         p.parameters.vesting_subperiod = 86400; // 60x60x24 = 1 day
-         p.parameters.period_start =  now; // now
-      });
-
-      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.vesting_period, 518400);
-      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.vesting_subperiod, 86400);
-      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.period_start, now);
-      // end global changes
+      update_gpos_global(518400, 86400, now);
 
       // moving outside period:
       generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
@@ -369,21 +366,8 @@ BOOST_AUTO_TEST_CASE( worker_dividends_voting )
       }
 
       // update default gpos global parameters to 4 days
-      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.vesting_period, 15552000);
-      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.vesting_subperiod, 2592000);
-      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.period_start, HARDFORK_GPOS_TIME.sec_since_epoch());
-
       auto now = db.head_block_time().sec_since_epoch();
-      db.modify(db.get_global_properties(), [now](global_property_object& p) {
-         p.parameters.vesting_period = 345600; // 60x60x24x4 = 4 days
-         p.parameters.vesting_subperiod = 86400; // 60x60x24 = 1 day
-         p.parameters.period_start =  now; // now
-      });
-
-      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.vesting_period, 345600);
-      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.vesting_subperiod, 86400);
-      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.period_start, now);
-      // end global changes
+      update_gpos_global(345600, 86400, now);
 
       generate_block();
       set_expiration(db, trx);
