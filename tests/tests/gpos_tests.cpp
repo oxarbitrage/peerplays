@@ -28,7 +28,6 @@
 #include <graphene/chain/balance_object.hpp>
 #include <graphene/chain/witness_object.hpp>
 #include <graphene/chain/committee_member_object.hpp>
-#include <graphene/chain/vesting_balance_object.hpp>
 #include <graphene/chain/worker_object.hpp>
 
 #include "../common/database_fixture.hpp"
@@ -45,6 +44,19 @@ struct gpos_fixture: database_fixture
          p.parameters.vesting_subperiod = vesting_subperiod;
          p.parameters.period_start =  period_start;
       });
+   }
+   void vote_for(const account_id_type account_id, const vote_id_type vote_for, const fc::ecc::private_key& key)
+   {
+      account_update_operation op;
+      op.account = account_id;
+      op.new_options = account_id(db).options;
+      op.new_options->votes.insert(vote_for);
+      trx.operations.push_back(op);
+      trx.validate();
+      set_expiration(db, trx);
+      sign(trx, key);
+      PUSH_TX(db, trx);
+      //trx.clear();
    }
 };
 
@@ -231,20 +243,8 @@ BOOST_AUTO_TEST_CASE( voting )
       /* commitee haves some votes by default so lets work with witnesses, probably need test for workers as well */
 
       // vote for witness1
-      {
-         signed_transaction trx;
-         account_update_operation op;
-         op.account = alice_id;
-         op.new_options = alice_id(db).options;
-         op.new_options->votes.insert(witness1.vote_id);
-         //op.new_options->votes.insert(committee_member1.vote_id);
-         trx.operations.push_back(op);
-         trx.validate();
-         set_expiration(db, trx);
-         sign(trx, alice_private_key);
-         PUSH_TX(db, trx);
-         //trx.clear();
-      }
+      vote_for(alice_id, witness1.vote_id, alice_private_key);
+
       generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
 
       auto alice_last_time_voted = alice_id(db).statistics(db).last_vote_time;
@@ -418,19 +418,7 @@ BOOST_AUTO_TEST_CASE( worker_dividends_voting )
       // samp[les in participation rewards are not reproducible
 
       // vote for worker
-      {
-         signed_transaction trx;
-         account_update_operation op;
-         op.account = voter1_id;
-         op.new_options = voter1_id(db).options;
-         op.new_options->votes.insert(worker.vote_for);
-         trx.operations.push_back(op);
-         trx.validate();
-         set_expiration(db, trx);
-         sign(trx, voter1_private_key);
-         PUSH_TX(db, trx);
-         //trx.clear();
-      }
+      vote_for(voter1_id, worker.vote_for, voter1_private_key);
 
       // first maint pass, coefficient will be 1
       generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
