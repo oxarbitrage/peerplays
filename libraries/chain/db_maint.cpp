@@ -730,24 +730,24 @@ double calculate_vesting_factor(const database& d, const account_object& stake_a
    fc::time_point_sec last_date_voted = stats.last_vote_time;
 
    // get global data related to gpos
-   auto gpo = d.get_global_properties();
-   auto vesting_period = gpo.parameters.vesting_period;
-   auto vesting_subperiod = gpo.parameters.vesting_subperiod;
-   auto period_start = time_point_sec(gpo.parameters.period_start);
+   const auto &gpo = d.get_global_properties();
+   const auto vesting_period = gpo.parameters.vesting_period;
+   const auto vesting_subperiod = gpo.parameters.vesting_subperiod;
+   const auto period_start = time_point_sec(gpo.parameters.period_start);
 
-   fc::time_point_sec period_end = period_start + vesting_period;
-   auto number_of_subperiods = vesting_period / vesting_subperiod;
+   const fc::time_point_sec period_end = period_start + vesting_period;
+   const auto number_of_subperiods = vesting_period / vesting_subperiod;
 
-   auto now = d.head_block_time();
+   const auto now = d.head_block_time();
 
    double vesting_factor;
    if(period_start <= now && now <= period_end) {
-      auto period_seconds = now.sec_since_epoch() - period_start.sec_since_epoch();
+      auto seconds_since_period_start = now.sec_since_epoch() - period_start.sec_since_epoch();
       // get in what period we are
       uint32_t current_period = 1;
-      for (current_period = 1; current_period <= number_of_subperiods; current_period++) {
-         if (period_seconds > vesting_subperiod * (current_period - 1)
-             && period_seconds < vesting_subperiod * current_period) {
+      for (current_period = 1; current_period <= number_of_subperiods; ++current_period) {
+         if (seconds_since_period_start > vesting_subperiod * (current_period - 1)
+             && seconds_since_period_start < vesting_subperiod * current_period) {
 
             break;
          }
