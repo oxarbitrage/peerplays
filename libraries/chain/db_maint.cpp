@@ -761,7 +761,7 @@ double calculate_vesting_factor(const database& d, const account_object& stake_a
       }
    }
 
-   if(current_period == 0) return 0;
+   if(current_period == 0 || current_period > number_of_subperiods) return 0;
 
    // coefficient calculation is: (n-1)/number_of_subperiods
    // calculate n, need more checks here, it is still a bit ugly
@@ -769,26 +769,25 @@ double calculate_vesting_factor(const database& d, const account_object& stake_a
    if (current_period > number_of_subperiods) // exception maybe?
       n = 1;
 
-   for(auto period: period_list)
+   auto period = std::find_if(period_list.begin(), period_list.end(),[&](uint32_t p) {
+      return (p == current_period);
+   });
+
+   std::list<uint32_t> subperiod_list(*period);
+   std::iota(subperiod_list.begin(), subperiod_list.end(), 1);
+
+   for(auto subperiod: subperiod_list)
    {
-      if (period == current_period) {
-         std::list<uint32_t> subperiod_list(period);
-         std::iota(subperiod_list.begin(), subperiod_list.end(), 1);
+      if (current_period - subperiod > 0) {
+         n = number_of_subperiods - current_period + 2;
 
-         for(auto subperiod: subperiod_list)
-         {
-            if (current_period - subperiod > 0) {
-               n = number_of_subperiods - current_period + 2;
+         if (last_date_voted <
+             (period_start + fc::seconds(vesting_subperiod * (current_period - subperiod - 1))) &&
+             last_date_voted >= (period_start + fc::seconds(vesting_subperiod * (current_period - subperiod))) &&
+             last_date_voted >= period_start) {
 
-               if (last_date_voted <
-                     (period_start + fc::seconds(vesting_subperiod * (current_period - subperiod - 1))) &&
-                     last_date_voted >= (period_start + fc::seconds(vesting_subperiod * (current_period - subperiod))) &&
-                     last_date_voted >= period_start) {
-
-                  n = number_of_subperiods + 1;
-                  break;
-               }
-            }
+            n = number_of_subperiods + 1;
+            break;
          }
       }
    }

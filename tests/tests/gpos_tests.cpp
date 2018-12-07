@@ -58,6 +58,17 @@ struct gpos_fixture: database_fixture
       PUSH_TX(db, trx);
       //trx.clear();
    }
+   void fill_reserve_pool(const account_id_type account_id, asset amount)
+   {
+      asset_reserve_operation op;
+      op.payer = account_id;
+      op.amount_to_reserve = amount;
+      trx.operations.push_back(op);
+      trx.validate();
+      set_expiration(db, trx);
+      PUSH_TX( db, trx, ~0 );
+      trx.clear();
+   }
 };
 
 BOOST_FIXTURE_TEST_SUITE( gpos_tests, gpos_fixture )
@@ -421,17 +432,8 @@ BOOST_AUTO_TEST_CASE( worker_dividends_voting )
 
       //BOOST_CHECK_EQUAL(worker.total_votes_against, 0);
 
-      // send some asset to the reserve pool for the worker
-      {
-         asset_reserve_operation op;
-         op.payer = account_id_type();
-         op.amount_to_reserve = asset(GRAPHENE_MAX_SHARE_SUPPLY/2);
-         trx.operations.push_back(op);
-         trx.validate();
-         set_expiration(db, trx);
-         PUSH_TX( db, trx, ~0 );
-         trx.clear();
-      }
+      // send some asset to the reserve pool so the worker can get paid
+      fill_reserve_pool(account_id_type(), asset(GRAPHENE_MAX_SHARE_SUPPLY/2));
 
       //BOOST_CHECK_EQUAL(worker_id_type()(db).worker.get<vesting_balance_worker_type>().balance(db).balance.amount.value, 0);
       //BOOST_CHECK_EQUAL(worker.worker.get<vesting_balance_worker_type>().balance(db).balance.amount.value, 0);
@@ -471,9 +473,6 @@ BOOST_AUTO_TEST_CASE( worker_dividends_voting )
       // here voter1 and voter2 get paid again but less money for vesting coefficient
       BOOST_CHECK_EQUAL(get_balance(voter1_id(db), core), 962);
       BOOST_CHECK_EQUAL(get_balance(voter2_id(db), core), 962);
-
-
-
    }
    catch (fc::exception &e) {
       edump((e.to_detail_string()));
@@ -544,22 +543,24 @@ BOOST_AUTO_TEST_CASE( competing_proposals )
 {
    try {
 
-      ACTORS((worker1)(worker2));
-
-      const auto& core = asset_id_type()(db);
-      generate_block();
-
-      transfer( committee_account, worker1_id, core.amount( 1000 ) );
-      transfer( committee_account, worker2_id, core.amount( 1000 ) );
-
-      /*
       // advance to HF
       while( db.head_block_time() <= HARDFORK_GPOS_TIME )
       {
          generate_block();
       }
-      */
+      generate_block();
 
+      set_expiration(db, trx);
+
+      ACTORS((worker1)(worker2));
+
+      const auto& core = asset_id_type()(db);
+
+      transfer( committee_account, worker1_id, core.amount( 1000 ) );
+      transfer( committee_account, worker2_id, core.amount( 1000 ) );
+
+
+      generate_block();
 
 
 
@@ -571,6 +572,9 @@ BOOST_AUTO_TEST_CASE( competing_proposals )
 
       wdump((w1));
       wdump((w2));
+
+      fill_reserve_pool(account_id_type(), asset(10));
+
 
 
       generate_block();
