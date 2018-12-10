@@ -747,19 +747,15 @@ double calculate_vesting_factor(const database& d, const account_object& stake_a
    auto seconds_since_period_start = now.sec_since_epoch() - period_start.sec_since_epoch();
 
    // get in what period we are
-   uint32_t current_period;
+   uint32_t current_period = 0;
    std::list<uint32_t> period_list(number_of_subperiods);
    std::iota(period_list.begin(), period_list.end(), 1);
 
-   for(auto period: period_list)
-   {
-      if (seconds_since_period_start > vesting_subperiod * (period - 1)
-          && seconds_since_period_start < vesting_subperiod * period) {
-
+   std::for_each(period_list.begin(), period_list.end(),[&](uint32_t period) {
+      if(seconds_since_period_start > vesting_subperiod * (period - 1) &&
+            seconds_since_period_start < vesting_subperiod * period)
          current_period = period;
-         break;
-      }
-   }
+   });
 
    if(current_period == 0 || current_period > number_of_subperiods) return 0;
 
