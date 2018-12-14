@@ -1090,10 +1090,11 @@ const worker_object& database_fixture::create_worker( const account_id_type owne
    worker_create_operation op;
    op.owner = owner;
    op.daily_pay = daily_pay;
-   op.initializer = burn_worker_initializer();
+   op.initializer = vesting_balance_worker_initializer(1);
    op.work_begin_date = db.head_block_time();
    op.work_end_date = op.work_begin_date + duration;
    trx.operations.push_back(op);
+   set_expiration(db, trx);
    trx.validate();
    processed_transaction ptx = db.push_transaction(trx, ~0);
    trx.clear();

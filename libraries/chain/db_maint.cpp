@@ -735,21 +735,19 @@ double calculate_vesting_factor(const database& d, const account_object& stake_a
    const auto vesting_subperiod = gpo.parameters.vesting_subperiod;
    const auto period_start = time_point_sec(gpo.parameters.period_start);
 
+   //  variables needed
    const fc::time_point_sec period_end = period_start + vesting_period;
    const auto number_of_subperiods = vesting_period / vesting_subperiod;
-
    const auto now = d.head_block_time();
-
    double vesting_factor;
+   auto seconds_since_period_start = now.sec_since_epoch() - period_start.sec_since_epoch();
 
    FC_ASSERT(period_start <= now && now <= period_end);
-
-   auto seconds_since_period_start = now.sec_since_epoch() - period_start.sec_since_epoch();
 
    // get in what period we are
    uint32_t current_period = 0;
    std::list<uint32_t> period_list(number_of_subperiods);
-   std::iota(period_list.begin(), period_list.end(), 1);
+   std::iota(period_list.begin(), period_list.end(), 1); // todo: std::iota(period_list, 1); ??
 
    std::for_each(period_list.begin(), period_list.end(),[&](uint32_t period) {
       if(seconds_since_period_start > vesting_subperiod * (period - 1) &&
@@ -760,15 +758,15 @@ double calculate_vesting_factor(const database& d, const account_object& stake_a
    if(current_period == 0 || current_period > number_of_subperiods) return 0;
 
    // coefficient calculation is: (n-1)/number_of_subperiods
-   // calculate n, need more checks here, it is still a bit ugly
    double n = number_of_subperiods + 1;
    if (current_period > number_of_subperiods) // exception maybe?
-      n = 1;
+      return 0;
 
    auto period = std::find_if(period_list.begin(), period_list.end(),[&](uint32_t p) {
       return (p == current_period);
    });
 
+   // todo: improve this loop
    std::list<uint32_t> subperiod_list(*period);
    std::iota(subperiod_list.begin(), subperiod_list.end(), 1);
 

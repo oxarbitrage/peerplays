@@ -44,6 +44,9 @@ struct gpos_fixture: database_fixture
          p.parameters.vesting_subperiod = vesting_subperiod;
          p.parameters.period_start =  period_start;
       });
+      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.vesting_period, vesting_period);
+      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.vesting_subperiod, vesting_subperiod);
+      BOOST_CHECK_EQUAL(db.get_global_properties().parameters.period_start, period_start);
    }
    void vote_for(const account_id_type account_id, const vote_id_type vote_for, const fc::ecc::private_key& key)
    {
@@ -52,11 +55,11 @@ struct gpos_fixture: database_fixture
       op.new_options = account_id(db).options;
       op.new_options->votes.insert(vote_for);
       trx.operations.push_back(op);
-      trx.validate();
       set_expiration(db, trx);
+      trx.validate();
       sign(trx, key);
       PUSH_TX(db, trx);
-      //trx.clear();
+      trx.clear();
    }
    void fill_reserve_pool(const account_id_type account_id, asset amount)
    {
@@ -397,7 +400,7 @@ BOOST_AUTO_TEST_CASE( worker_dividends_voting )
       upgrade_to_lifetime_member(nathan_id);
 
       auto worker = create_worker(nathan_id, 10, fc::days(6));
-      auto worker_id = worker.id;
+      //auto worker_id = worker.id;
 
       // add some vesting to voter1
       create_vesting(voter1_id, core.amount(100), vesting_balance_type::gpos);
@@ -435,13 +438,13 @@ BOOST_AUTO_TEST_CASE( worker_dividends_voting )
       // send some asset to the reserve pool so the worker can get paid
       fill_reserve_pool(account_id_type(), asset(GRAPHENE_MAX_SHARE_SUPPLY/2));
 
-      //BOOST_CHECK_EQUAL(worker_id_type()(db).worker.get<vesting_balance_worker_type>().balance(db).balance.amount.value, 0);
-      //BOOST_CHECK_EQUAL(worker.worker.get<vesting_balance_worker_type>().balance(db).balance.amount.value, 0);
+      BOOST_CHECK_EQUAL(worker_id_type()(db).worker.get<vesting_balance_worker_type>().balance(db).balance.amount.value, 0);
+      BOOST_CHECK_EQUAL(worker.worker.get<vesting_balance_worker_type>().balance(db).balance.amount.value, 0);
 
       // worker is getting paid
       generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
-      //BOOST_CHECK_EQUAL(worker_id_type()(db).worker.get<vesting_balance_worker_type>().balance(db).balance.amount.value, 10);
-      //BOOST_CHECK_EQUAL(worker.worker.get<vesting_balance_worker_type>().balance(db).balance.amount.value, 10);
+      BOOST_CHECK_EQUAL(worker_id_type()(db).worker.get<vesting_balance_worker_type>().balance(db).balance.amount.value, 10);
+      BOOST_CHECK_EQUAL(worker.worker.get<vesting_balance_worker_type>().balance(db).balance.amount.value, 10);
 
       generate_block();
 
@@ -543,42 +546,114 @@ BOOST_AUTO_TEST_CASE( competing_proposals )
 {
    try {
 
-      // advance to HF
-      while( db.head_block_time() <= HARDFORK_GPOS_TIME )
-      {
-         generate_block();
-      }
-      generate_block();
-
-      set_expiration(db, trx);
-
-      ACTORS((worker1)(worker2));
+      ACTORS((voter1)(voter2)(worker1)(worker2));
 
       const auto& core = asset_id_type()(db);
 
       transfer( committee_account, worker1_id, core.amount( 1000 ) );
       transfer( committee_account, worker2_id, core.amount( 1000 ) );
+      transfer( committee_account, voter1_id, core.amount( 1000 ) );
+      transfer( committee_account, voter2_id, core.amount( 1000 ) );
 
+      create_vesting(voter1_id, core.amount(200), vesting_balance_type::gpos);
+      create_vesting(voter2_id, core.amount(300), vesting_balance_type::gpos);
 
-      generate_block();
+      // advance to HF
+      while( db.head_block_time() <= HARDFORK_GPOS_TIME )
+      {
+         generate_block();
+      }
 
+      auto now = db.head_block_time().sec_since_epoch();
+      update_gpos_global(518400, 86400, now);
 
+      update_payout_interval(core.symbol, fc::time_point::now() + fc::minutes(1), 60 * 60 * 24); // 1 day
 
       upgrade_to_lifetime_member(worker1_id);
       upgrade_to_lifetime_member(worker2_id);
 
-      auto w1 = create_worker(worker1_id, 10, fc::days(6));
-      auto w2 = create_worker(worker2_id, 10, fc::days(6));
+      // create 2 competing proposals asking a lot of token
+      // todo: maybe a refund worker here so we can test with smaller numbers
+      auto w1 = create_worker(worker1_id, 100000000000, fc::days(10));
+      auto w1_id_instance = w1.id.instance();
+      auto w2 = create_worker(worker2_id, 100000000000, fc::days(10));
+      auto w2_id_instance = w2.id.instance();
 
-      wdump((w1));
-      wdump((w2));
+      fill_reserve_pool(account_id_type(), asset(GRAPHENE_MAX_SHARE_SUPPLY/2));
 
-      fill_reserve_pool(account_id_type(), asset(10));
+      // vote for the 2 workers
+      vote_for(voter1_id, w1.vote_for, voter1_private_key);
+      vote_for(voter2_id, w2.vote_for, voter2_private_key);
 
-
-
+      generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
       generate_block();
 
+      w1 = worker_id_type(w1_id_instance)(db);
+      w2 = worker_id_type(w2_id_instance)(db);
+
+      generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
+      generate_block();
+
+      // only w2 is getting paid as it haves more votes and money is only enough for 1
+      BOOST_CHECK_EQUAL(w1.worker.get<vesting_balance_worker_type>().balance(db).balance.amount.value, 0);
+      BOOST_CHECK_EQUAL(w2.worker.get<vesting_balance_worker_type>().balance(db).balance.amount.value, 100000000000);
+
+      generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
+      generate_block();
+
+      BOOST_CHECK_EQUAL(w1.worker.get<vesting_balance_worker_type>().balance(db).balance.amount.value, 0);
+      BOOST_CHECK_EQUAL(w2.worker.get<vesting_balance_worker_type>().balance(db).balance.amount.value, 150000000000);
+
+      generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
+      generate_block();
+
+      w1 = worker_id_type(w1_id_instance)(db);
+      w2 = worker_id_type(w2_id_instance)(db);
+
+      // as votes decay w1 is still getting paid as it always have more votes than w1
+      BOOST_CHECK_EQUAL(w1.total_votes_for, 100);
+      BOOST_CHECK_EQUAL(w2.total_votes_for, 150);
+
+      BOOST_CHECK_EQUAL(w1.worker.get<vesting_balance_worker_type>().balance(db).balance.amount.value, 0);
+      BOOST_CHECK_EQUAL(w2.worker.get<vesting_balance_worker_type>().balance(db).balance.amount.value, 200000000000);
+
+      generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
+      generate_block();
+
+      w1 = worker_id_type(w1_id_instance)(db);
+      w2 = worker_id_type(w2_id_instance)(db);
+
+      BOOST_CHECK_EQUAL(w1.total_votes_for, 66);
+      BOOST_CHECK_EQUAL(w2.total_votes_for, 100);
+
+      // worker is sil getting paid as days pass
+      BOOST_CHECK_EQUAL(w1.worker.get<vesting_balance_worker_type>().balance(db).balance.amount.value, 0);
+      BOOST_CHECK_EQUAL(w2.worker.get<vesting_balance_worker_type>().balance(db).balance.amount.value, 250000000000);
+
+      generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
+      generate_block();
+
+      w1 = worker_id_type(w1_id_instance)(db);
+      w2 = worker_id_type(w2_id_instance)(db);
+
+      BOOST_CHECK_EQUAL(w1.total_votes_for, 33);
+      BOOST_CHECK_EQUAL(w2.total_votes_for, 50);
+
+      BOOST_CHECK_EQUAL(w1.worker.get<vesting_balance_worker_type>().balance(db).balance.amount.value, 0);
+      BOOST_CHECK_EQUAL(w2.worker.get<vesting_balance_worker_type>().balance(db).balance.amount.value, 300000000000);
+
+      generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
+      generate_block();
+
+      w1 = worker_id_type(w1_id_instance)(db);
+      w2 = worker_id_type(w2_id_instance)(db);
+
+      // worker2 will not get paid anymore as it haves 0 votes
+      BOOST_CHECK_EQUAL(w1.total_votes_for, 0);
+      BOOST_CHECK_EQUAL(w2.total_votes_for, 0);
+
+      BOOST_CHECK_EQUAL(w1.worker.get<vesting_balance_worker_type>().balance(db).balance.amount.value, 0);
+      BOOST_CHECK_EQUAL(w2.worker.get<vesting_balance_worker_type>().balance(db).balance.amount.value, 300000000000);
    }
    catch (fc::exception &e) {
       edump((e.to_detail_string()));
