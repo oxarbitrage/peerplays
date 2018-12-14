@@ -89,8 +89,8 @@ void verify_account_votes( database& db, const account_options& options, const a
          }
       }
    }
+   // in bitshares this is done in do_apply of account_update_evaluator
    if(account.instance != 0) {
-      //const auto &stats_obj = db.get_account_stats_by_owner(account);
       const auto& stats_obj = account(db).statistics(db);
       db.modify(stats_obj, [&](account_statistics_object &obj) {
          obj.last_vote_time = db.head_block_time();
