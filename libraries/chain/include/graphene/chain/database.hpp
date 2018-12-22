@@ -51,7 +51,6 @@ namespace graphene { namespace chain {
    class transaction_evaluation_state;
 
    struct budget_record;
-   enum class vesting_balance_type;
 
    /**
     *   @class database

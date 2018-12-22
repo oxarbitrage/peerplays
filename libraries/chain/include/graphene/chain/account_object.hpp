@@ -81,7 +81,7 @@ namespace graphene { namespace chain {
 
          time_point_sec last_vote_time; // add last time voted
 
-      /// @brief Split up and pay out @ref pending_fees and @ref pending_vested_fees
+         /// @brief Split up and pay out @ref pending_fees and @ref pending_vested_fees
          void process_fees(const account_object& a, database& d) const;
 
          /**
