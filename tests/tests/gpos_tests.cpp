@@ -671,15 +671,4 @@ BOOST_AUTO_TEST_CASE( proxy_voting )
    }
 }
 
-BOOST_AUTO_TEST_CASE( noncore )
-{
-   try {
-
-   }
-   catch (fc::exception &e) {
-      edump((e.to_detail_string()));
-      throw;
-   }
-}
-
 BOOST_AUTO_TEST_SUITE_END()
