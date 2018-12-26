@@ -49,6 +49,10 @@ BOOST_FIXTURE_TEST_SUITE( dividend_tests, database_fixture )
    BOOST_AUTO_TEST_CASE( create_dividend_uia )
    {
       using namespace graphene;
+
+      if(hf_gpos)
+         generate_blocks( HARDFORK_GPOS_TIME );
+
       try {
          BOOST_TEST_MESSAGE("Creating dividend holder asset");
          {
@@ -152,6 +156,10 @@ BOOST_FIXTURE_TEST_SUITE( dividend_tests, database_fixture )
    BOOST_AUTO_TEST_CASE( test_update_dividend_interval )
    {
       using namespace graphene;
+
+      if(hf_gpos)
+         generate_blocks( HARDFORK_GPOS_TIME );
+
       try {
          INVOKE( create_dividend_uia );
 
@@ -222,6 +230,10 @@ BOOST_FIXTURE_TEST_SUITE( dividend_tests, database_fixture )
    BOOST_AUTO_TEST_CASE( test_basic_dividend_distribution )
    {
       using namespace graphene;
+
+      if(hf_gpos)
+         generate_blocks( HARDFORK_GPOS_TIME );
+
       try {
          INVOKE( create_dividend_uia );
 
@@ -355,6 +367,10 @@ BOOST_FIXTURE_TEST_SUITE( dividend_tests, database_fixture )
    BOOST_AUTO_TEST_CASE( test_dividend_distribution_interval )
    {
       using namespace graphene;
+
+      if(hf_gpos)
+         generate_blocks( HARDFORK_GPOS_TIME );
+
       try {
          INVOKE( create_dividend_uia );
 
@@ -377,6 +393,10 @@ BOOST_FIXTURE_TEST_SUITE( dividend_tests, database_fixture )
    BOOST_AUTO_TEST_CASE( check_dividend_corner_cases )
    {
       using namespace graphene;
+
+      if(hf_gpos)
+         generate_blocks( HARDFORK_GPOS_TIME );
+
       try {
          INVOKE( create_dividend_uia );
 
@@ -495,4 +515,69 @@ BOOST_FIXTURE_TEST_SUITE( dividend_tests, database_fixture )
          throw;
       }
    }
+   BOOST_AUTO_TEST_CASE( create_dividend_uia_gpos )
+   {
+      try {
+
+         hf_gpos = true;
+         INVOKE(create_dividend_uia);
+
+      } catch(fc::exception& e) {
+         edump((e.to_detail_string()));
+         throw;
+      }
+   }
+
+   BOOST_AUTO_TEST_CASE( test_update_dividend_interval_gpos )
+   {
+      try {
+
+         hf_gpos = true;
+         INVOKE(test_update_dividend_interval);
+
+      } catch(fc::exception& e) {
+         edump((e.to_detail_string()));
+         throw;
+      }
+   }
+
+   BOOST_AUTO_TEST_CASE( test_basic_dividend_distribution_gpos )
+   {
+      try {
+
+         hf_gpos = true;
+         INVOKE(test_basic_dividend_distribution);
+
+      } catch(fc::exception& e) {
+         edump((e.to_detail_string()));
+         throw;
+      }
+   }
+
+   BOOST_AUTO_TEST_CASE( test_dividend_distribution_interval_gpos )
+   {
+      try {
+
+         hf_gpos = true;
+         INVOKE(test_dividend_distribution_interval);
+
+      } catch(fc::exception& e) {
+         edump((e.to_detail_string()));
+         throw;
+      }
+   }
+
+   BOOST_AUTO_TEST_CASE( check_dividend_corner_cases_gpos )
+   {
+      try {
+
+         hf_gpos = true;
+         INVOKE(check_dividend_corner_cases);
+
+      } catch(fc::exception& e) {
+         edump((e.to_detail_string()));
+         throw;
+      }
+   }
+
 BOOST_AUTO_TEST_SUITE_END() // end dividend_tests suite

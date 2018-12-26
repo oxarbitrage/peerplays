@@ -832,7 +832,7 @@ void schedule_pending_dividend_balances(database& db,
    uint32_t holder_account_count = 0;
    for (const vesting_balance_object &vesting_balance_obj : boost::make_iterator_range(vesting_balances_begin,
                                                                                        vesting_balances_end)) {
-      if(db.head_block_time() < HARDFORK_GPOS_TIME) {
+      if(db.head_block_time() < HARDFORK_GPOS_TIME || dividend_holder_asset_obj.symbol != GRAPHENE_SYMBOL) { // only for core
          vesting_amounts[vesting_balance_obj.owner] += vesting_balance_obj.balance.amount;
          dlog("Vesting balance for account: ${owner}, amount: ${amount}",
                ("owner", vesting_balance_obj.owner(db).name)
@@ -864,7 +864,7 @@ void schedule_pending_dividend_balances(database& db,
    auto holder_balances_end = balance_index.indices().get<by_asset_balance>().upper_bound(
          boost::make_tuple(dividend_holder_asset_obj.id, share_type()));
 
-   if(db.head_block_time() < HARDFORK_GPOS_TIME)
+   if(db.head_block_time() < HARDFORK_GPOS_TIME || dividend_holder_asset_obj.symbol != GRAPHENE_SYMBOL)
       holder_account_count = std::distance(holder_balances_begin, holder_balances_end);
 
    // the fee, in BTS, for distributing each asset in the account
@@ -876,7 +876,7 @@ void schedule_pending_dividend_balances(database& db,
    // the distribution account)
    share_type total_balance_of_dividend_asset;
 
-   if(db.head_block_time() < HARDFORK_GPOS_TIME) {
+   if(db.head_block_time() < HARDFORK_GPOS_TIME || dividend_holder_asset_obj.symbol != GRAPHENE_SYMBOL) { // only core
       for (const account_balance_object &holder_balance_object : boost::make_iterator_range(holder_balances_begin,
                                                                                             holder_balances_end))
          if (holder_balance_object.owner != dividend_data.dividend_distribution_account) {
@@ -1007,7 +1007,7 @@ void schedule_pending_dividend_balances(database& db,
                           ("total", total_balance_of_dividend_asset));
                share_type remaining_amount_to_distribute = delta_balance;
 
-               if(db.head_block_time() < HARDFORK_GPOS_TIME) {
+               if(db.head_block_time() < HARDFORK_GPOS_TIME || dividend_holder_asset_obj.symbol != GRAPHENE_SYMBOL) { // core only
 
                   // credit each account with their portion, don't send any back to the dividend distribution account
                   for (const account_balance_object &holder_balance_object : boost::make_iterator_range(

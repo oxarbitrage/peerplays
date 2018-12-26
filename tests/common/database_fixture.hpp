@@ -160,6 +160,7 @@ struct database_fixture {
    optional<fc::temp_directory> data_dir;
    bool skip_key_index_test = false;
    uint32_t anon_acct_count;
+   bool hf_gpos = false;
 
    database_fixture();
    ~database_fixture();
