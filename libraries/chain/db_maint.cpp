@@ -819,12 +819,17 @@ void schedule_pending_dividend_balances(database& db,
 
    std::map<account_id_type, share_type> vesting_amounts;
    // get only once a collection of accounts that hold nonzero vesting balances of the dividend asset
+
+   auto balance_type = vesting_balance_type::unspecified;
+   if(db.head_block_time() > HARDFORK_GPOS_TIME)
+      balance_type = vesting_balance_type::gpos;
+
    auto vesting_balances_begin =
             vesting_index.indices().get<by_asset_balance>().lower_bound(
-                  boost::make_tuple(dividend_holder_asset_obj.id));
+                  boost::make_tuple(dividend_holder_asset_obj.id, balance_type));
    auto vesting_balances_end =
             vesting_index.indices().get<by_asset_balance>().upper_bound(
-                  boost::make_tuple(dividend_holder_asset_obj.id, share_type()));
+                  boost::make_tuple(dividend_holder_asset_obj.id, balance_type, share_type()));
 
    uint64_t distribution_base_fee = gpo.parameters.current_fees->get<asset_dividend_distribution_operation>().distribution_base_fee;
    uint32_t distribution_fee_per_holder = gpo.parameters.current_fees->get<asset_dividend_distribution_operation>().distribution_fee_per_holder;
@@ -832,22 +837,10 @@ void schedule_pending_dividend_balances(database& db,
    uint32_t holder_account_count = 0;
    for (const vesting_balance_object &vesting_balance_obj : boost::make_iterator_range(vesting_balances_begin,
                                                                                        vesting_balances_end)) {
-      if(db.head_block_time() < HARDFORK_GPOS_TIME || dividend_holder_asset_obj.symbol != GRAPHENE_SYMBOL) { // only for core
-         vesting_amounts[vesting_balance_obj.owner] += vesting_balance_obj.balance.amount;
-         dlog("Vesting balance for account: ${owner}, amount: ${amount}",
-               ("owner", vesting_balance_obj.owner(db).name)
-               ("amount", vesting_balance_obj.balance.amount));
-      }
-      else {
-         if(vesting_balance_obj.balance_type == vesting_balance_type::gpos) {
-            vesting_amounts[vesting_balance_obj.owner] += vesting_balance_obj.balance.amount;
-            dlog("Vesting balance for account: ${owner}, amount: ${amount}",
-                  ("owner", vesting_balance_obj.owner(db).name)
-                  ("amount", vesting_balance_obj.balance.amount));
-
-            ++holder_account_count;
-         }
-      }
+      vesting_amounts[vesting_balance_obj.owner] += vesting_balance_obj.balance.amount;
+      dlog("Vesting balance for account: ${owner}, amount: ${amount}",
+           ("owner", vesting_balance_obj.owner(db).name)("amount", vesting_balance_obj.balance.amount));
+      ++holder_account_count;
    }
 
    auto current_distribution_account_balance_iter = current_distribution_account_balance_range.first;
@@ -1406,23 +1399,18 @@ void database::perform_chain_maintenance(const signed_block& next_block, const g
          d._committee_count_histogram_buffer.resize(props.parameters.maximum_committee_count / 2 + 1);
          d._total_voting_stake = 0;
 
+         auto balance_type = vesting_balance_type::unspecified;
+         if(d.head_block_time() > HARDFORK_GPOS_TIME)
+            balance_type = vesting_balance_type::gpos;
+
          const vesting_balance_index& vesting_index = d.get_index_type<vesting_balance_index>();
          auto vesting_balances_begin =
-              vesting_index.indices().get<by_asset_balance>().lower_bound(boost::make_tuple(asset_id_type()));
+              vesting_index.indices().get<by_asset_balance>().lower_bound(boost::make_tuple(asset_id_type(), balance_type));
          auto vesting_balances_end =
-              vesting_index.indices().get<by_asset_balance>().upper_bound(boost::make_tuple(asset_id_type(), share_type()));
+              vesting_index.indices().get<by_asset_balance>().upper_bound(boost::make_tuple(asset_id_type(), balance_type, share_type()));
          for (const vesting_balance_object& vesting_balance_obj : boost::make_iterator_range(vesting_balances_begin, vesting_balances_end))
          {
-            if(d.head_block_time() < HARDFORK_GPOS_TIME)
-               vesting_amounts[vesting_balance_obj.owner] += vesting_balance_obj.balance.amount;
-            else {
-               if(vesting_balance_obj.balance_type == vesting_balance_type::gpos) {
-                  vesting_amounts[vesting_balance_obj.owner] += vesting_balance_obj.balance.amount;
-               }
-            }
-            //dlog("Vesting balance for account: ${owner}, amount: ${amount}",
-            //     ("owner", vesting_balance_obj.owner(d).name)
-            //     ("amount", vesting_balance_obj.balance.amount));
+            vesting_amounts[vesting_balance_obj.owner] += vesting_balance_obj.balance.amount;
          }
       }
 
