@@ -220,14 +220,15 @@ BOOST_AUTO_TEST_CASE( voting )
       // default maintenance_interval is 1 day
       BOOST_CHECK_EQUAL(db.get_global_properties().parameters.maintenance_interval, 86400);
 
-      // add some vesting to alice
-      create_vesting(alice_id, core.amount(100), vesting_balance_type::gpos);
-
       // advance to HF
       while( db.head_block_time() <= HARDFORK_GPOS_TIME )
       {
          generate_block();
       }
+
+      // add some vesting to alice
+      create_vesting(alice_id, core.amount(100), vesting_balance_type::gpos);
+      generate_block();
 
       // update default gpos global parameters to make this thing faster
       BOOST_CHECK_EQUAL(db.get_global_properties().parameters.vesting_period, 15552000);
@@ -555,14 +556,16 @@ BOOST_AUTO_TEST_CASE( competing_proposals )
       transfer( committee_account, voter1_id, core.amount( 1000 ) );
       transfer( committee_account, voter2_id, core.amount( 1000 ) );
 
-      create_vesting(voter1_id, core.amount(200), vesting_balance_type::gpos);
-      create_vesting(voter2_id, core.amount(300), vesting_balance_type::gpos);
-
       // advance to HF
       while( db.head_block_time() <= HARDFORK_GPOS_TIME )
       {
          generate_block();
       }
+
+      create_vesting(voter1_id, core.amount(200), vesting_balance_type::gpos);
+      create_vesting(voter2_id, core.amount(300), vesting_balance_type::gpos);
+
+      generate_block();
 
       auto now = db.head_block_time().sec_since_epoch();
       update_gpos_global(518400, 86400, now);

@@ -1105,11 +1105,10 @@ const vesting_balance_object& database_fixture::create_vesting(const account_id_
                                                                const vesting_balance_type type)
 { try {
    vesting_balance_create_operation op;
-   //op.fee = core.amount(0);
    op.creator = owner;
    op.owner = owner;
    op.amount = amount;
-   op.balance_type = vesting_balance_type::gpos;
+   op.balance_type = type;
    op.policy = cdd_vesting_policy_initializer{60 * 60 * 24};
 
    trx.operations.push_back(op);
