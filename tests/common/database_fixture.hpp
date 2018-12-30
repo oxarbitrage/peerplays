@@ -285,12 +285,6 @@ struct database_fixture {
                                                account_id_type dividend_holder_account_id, 
                                                asset_id_type dividend_payout_asset_type) const;
    vector< operation_history_object > get_operation_history( account_id_type account_id )const;
-
-   const worker_object& create_worker(const account_id_type owner, const share_type daily_pay = 1000,
-                                      const fc::microseconds& duration = fc::days(2));
-   const vesting_balance_object& create_vesting(const account_id_type owner, const asset amount,
-                                                const vesting_balance_type type = vesting_balance_type::unspecified);
-   void update_payout_interval(std::string asset_name, fc::time_point start, uint32_t interval);
 };
 
 namespace test {

@@ -1083,56 +1083,6 @@ vector< operation_history_object > database_fixture::get_operation_history( acco
    return result;
 }
 
-// gpos stuff
-const worker_object& database_fixture::create_worker( const account_id_type owner, const share_type daily_pay,
-                                                      const fc::microseconds& duration )
-{ try {
-   worker_create_operation op;
-   op.owner = owner;
-   op.daily_pay = daily_pay;
-   op.initializer = vesting_balance_worker_initializer(1);
-   op.work_begin_date = db.head_block_time();
-   op.work_end_date = op.work_begin_date + duration;
-   trx.operations.push_back(op);
-   set_expiration(db, trx);
-   trx.validate();
-   processed_transaction ptx = db.push_transaction(trx, ~0);
-   trx.clear();
-   return db.get<worker_object>(ptx.operation_results[0].get<object_id_type>());
-} FC_CAPTURE_AND_RETHROW() }
-
-const vesting_balance_object& database_fixture::create_vesting(const account_id_type owner, const asset amount,
-                                                               const vesting_balance_type type)
-{ try {
-   vesting_balance_create_operation op;
-   op.creator = owner;
-   op.owner = owner;
-   op.amount = amount;
-   op.balance_type = type;
-   op.policy = cdd_vesting_policy_initializer{60 * 60 * 24};
-
-   trx.operations.push_back(op);
-   set_expiration(db, trx);
-   processed_transaction ptx = PUSH_TX(db, trx, ~0);
-   trx.clear();
-   return db.get<vesting_balance_object>(ptx.operation_results[0].get<object_id_type>());
-
-} FC_CAPTURE_AND_RETHROW() }
-
-void database_fixture::update_payout_interval(std::string asset_name, fc::time_point start, uint32_t interval)
-{ try {
-   auto dividend_holder_asset_object = get_asset(asset_name);
-   asset_update_dividend_operation op;
-   op.issuer = dividend_holder_asset_object.issuer;
-   op.asset_to_update = dividend_holder_asset_object.id;
-   op.new_options.next_payout_time = start;
-   op.new_options.payout_interval = interval;
-   trx.operations.push_back(op);
-   set_expiration(db, trx);
-   PUSH_TX(db, trx, ~0);
-   trx.operations.clear();
-} FC_CAPTURE_AND_RETHROW() }
-
 namespace test {
 
 void set_expiration( const database& db, transaction& tx )

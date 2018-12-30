@@ -37,6 +37,52 @@ using namespace graphene::chain::test;
 
 struct gpos_fixture: database_fixture
 {
+   const worker_object& create_worker( const account_id_type owner, const share_type daily_pay,
+                                       const fc::microseconds& duration ) {
+      worker_create_operation op;
+      op.owner = owner;
+      op.daily_pay = daily_pay;
+      op.initializer = vesting_balance_worker_initializer(1);
+      op.work_begin_date = db.head_block_time();
+      op.work_end_date = op.work_begin_date + duration;
+      trx.operations.push_back(op);
+      set_expiration(db, trx);
+      trx.validate();
+      processed_transaction ptx = db.push_transaction(trx, ~0);
+      trx.clear();
+      return db.get<worker_object>(ptx.operation_results[0].get<object_id_type>());
+   }
+   const vesting_balance_object& create_vesting(const account_id_type owner, const asset amount,
+                                                const vesting_balance_type type)
+   {
+      vesting_balance_create_operation op;
+      op.creator = owner;
+      op.owner = owner;
+      op.amount = amount;
+      op.balance_type = type;
+      //op.policy = cdd_vesting_policy_initializer{60 * 60 * 24};
+
+      trx.operations.push_back(op);
+      set_expiration(db, trx);
+      processed_transaction ptx = PUSH_TX(db, trx, ~0);
+      trx.clear();
+      return db.get<vesting_balance_object>(ptx.operation_results[0].get<object_id_type>());
+   }
+
+   void update_payout_interval(std::string asset_name, fc::time_point start, uint32_t interval)
+   {
+      auto dividend_holder_asset_object = get_asset(asset_name);
+      asset_update_dividend_operation op;
+      op.issuer = dividend_holder_asset_object.issuer;
+      op.asset_to_update = dividend_holder_asset_object.id;
+      op.new_options.next_payout_time = start;
+      op.new_options.payout_interval = interval;
+      trx.operations.push_back(op);
+      set_expiration(db, trx);
+      PUSH_TX(db, trx, ~0);
+      trx.operations.clear();
+   }
+
    void update_gpos_global(uint32_t vesting_period, uint32_t vesting_subperiod, uint32_t period_start)
    {
       db.modify(db.get_global_properties(), [vesting_period, vesting_subperiod, period_start](global_property_object& p) {
