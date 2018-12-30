@@ -24,6 +24,8 @@
 #pragma once
 
 #include <graphene/chain/protocol/asset.hpp>
+#include <graphene/chain/protocol/vesting.hpp>
+
 #include <graphene/db/object.hpp>
 #include <graphene/db/generic_index.hpp>
 
@@ -125,9 +127,7 @@ namespace graphene { namespace chain {
       linear_vesting_policy,
       cdd_vesting_policy
       > vesting_policy;
-
-   enum class vesting_balance_type { unspecified, gpos };
-
+      
    /**
     * Vesting balance object is a balance that is locked by the blockchain for a period of time.
     */
@@ -233,5 +233,3 @@ FC_REFLECT_DERIVED(graphene::chain::vesting_balance_object, (graphene::db::objec
                    (policy)
                    (balance_type)
                   )
-
-FC_REFLECT_ENUM( graphene::chain::vesting_balance_type, (unspecified)(gpos) )
